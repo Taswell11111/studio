@@ -44,7 +44,8 @@ const updateShipmentStatusFlow = ai.defineFlow(
     name: 'updateShipmentStatusFlow',
     inputSchema: UpdateShipmentStatusInputSchema,
     outputSchema: UpdateShipmentStatusOutputSchema,
-  },\n  async (input) => {
+  },
+  async (input) => {
     const { shipmentId, trackingNo, courier } = input;
 
     // Securely map courier names to environment variable prefixes on the server
@@ -76,10 +77,10 @@ const updateShipmentStatusFlow = ai.defineFlow(
     const creds = credentialsMap[upperCourier];
     
     if (!creds || !creds.apiUsername || !creds.apiPassword) {
-      console.error(`Warehouse API credentials (username/password) for "${courier}" are not configured in .env file.`);
+      console.error(`Warehouse API credentials (username/password) for \"${courier}\" are not configured in .env file.`);
       return {
         success: false,
-        message: `Warehouse integration is not configured for "${courier}". Missing API username or password.`,
+        message: `Warehouse integration is not configured for \"${courier}\". Missing API username or password.`,
       };
     }
 
