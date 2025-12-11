@@ -1,0 +1,35 @@
+/**
+ * Core Philosophy: This ruleset enforces a public read-only data model for
+ * unauthenticated users, but allows authenticated users (including anonymous ones)
+ * to write data. This is designed for applications where data is managed by
+ * client applications and read by the public.
+ *
+ * Data Structure: All application data is nested under the `/artifacts/{appId}`
+ * path, which allows for data segregation between different application instances
+ * or environments (e.g., staging vs. production) within the same Firestore project.
+ * The shipment data itself is located at `/artifacts/{appId}/public/data/shipments`.
+ *
+ * Key Security Decisions:
+ * - Public Read Access: All documents within the `shipments` collection are publicly
+ *   readable by anyone, including unauthenticated users. This supports the primary
+ *   use case of looking up shipment information without requiring a login.
+ * - Authenticated Client-Side Writes: To allow users of the app to upload CSV data,
+ *   write operations (`create`, `update`, `delete`) are permitted only for authenticated
+ *   users. Given the app uses anonymous sign-in, any user actively using the app
+ *   will be authenticated.
+ * - Denormalization for Authorization: This principle is not applicable here as
+ *   there are no user-specific authorization checks. The security model is uniform
+ *   across the entire collection.
+ * - Structural Segregation: The path itself (`.../public/data/...`) clearly
+ *   segregates this public data from any potential future private data collections,
+ *   making the security posture clear and easy to audit.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /artifacts/{appId}/public/data/shipments/{shipmentId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

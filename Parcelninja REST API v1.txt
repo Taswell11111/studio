@@ -1,0 +1,299 @@
+Parcelninja REST API v1.0IntroductionPlease note that Basic Authentication is required on all requests.The API can be called at https://storeapi.parcelninja.com/api/v1All example calls to the "Mock Server" will return a hard-coded response. The Basic Authentication details supplied are not validated for these calls.Follow @PN_Status on Twitter for maintenance announcements or downtime. https://twitter.com/PN_StatusPlease email ITSupport@parcelninja.com for queries. You will need to quote and provide the x-request-id returned by the API for queries.Rate LimitingAPI rate limit is 4,000 requests per hour. Exceeding the limit will result in the HTTP Status code "429 - Too Many Requests" response.StandardsAll timestamps are provided in UTC timezone. Format YYYYMMDDHHmmSSHow should the Parcelninja API be used?Parcelninja should be seen as the master of all stock. ERP systems should not be used as stock masters. This is because the stock reported by an ERP system may not match the actual stock within in the warehouse for a variety of reasons (damaged stock, incorrect stock submitted, incorrect SKU's etc). You can however, keep a snapshot of stock within 3rd party systems but these systems will have to regularly update from the Parcelninja API using the Inventory Endpoint (detailed below in the document).We have found that the best implementations involve stock levels being checked periodically and once again after a client adds items to a cart. If the item is out of stock, you can display an 'Out of Stock' notice, remove the item off your site or show additional lead times for delivery. SKU-specific stock levels can be checked for all items in the warehouse.Some DefinitionsInbounds are shipments which eventually arrive at Parcelninja.Example: Inbound stock from a supplier or a customer returning a product.Outbounds are shipments which leave Parcelninja.Example: Customer order or returning stock to a supplier.Inventory is a catalog of all your items that have been received at Parcelninja.
+ReferenceInboundsIn order for stock to be received at the warehouse, an inbound needs to be created beforehand so that the warehouse becomes aware of the incoming shipment. The inbound must contain a detailed list of items in the shipment. The inbound can either be created through the Parcelninja website or through the Parcelninja API (detailed here).Inbound Status CodesAwaiting Arrival (Code: 200)Arrived at warehouse (Code: 201)Being Processed (Code: 202)Processing complete (Code: 203)Processing complete with variance (Code: 204)
+List of Inbounds
+Retrieve inbounds
+Returns a summary of inbounds in a given time period.Specific InboundFind Inbounds by your own Inbound order numberIf you would like to find an inbound by your custom order number that you created it with, then you may include it as the value for the header X-Client-Id. This will override the regular id, which should still be passed an integer value, eg 0.
+Retrieve an inbound
+Returns an inbound with minimal details.
+Delete an inbound
+Deletes an inbound.Please first check the Inbound with event history. If the latest Event code is greater than 200, it can not be cancelled.Inbound with event history
+Retrieve inbound with events
+Returns an inbound with full event history.Create InboundWhen a new inbound is created, the internal id is returned in the header as x-parcelninja-inbound-id. This is the id that should be used when making lookup requests.A note on RMAsWhen an RMA (Return Merchandise Authorisation) is created by setting typeId: 3, you have the option to create a reason why. An example call may look like the following:{ "clientId": "PO-32333337", "typeId": 3, "deliveryInfo": { "customer": "TestCustomer", "estimatedArrivalDate": 20150618 }, "items": [ { "itemNo": "OOPROD1", "name": "Kenwood Digital Amplifier", "qty": 2, "barcode": "5515", "returnReason": "Broken", "returnDetail": "Product was damaged upon arrival.", "unsellable": true } ] }Note the returnReason and returnDetail fields. You may also specify if the item being returned is unsellable. Note the unsellable field.Pickups and Supplier referenceWe have added the ability to request a pickup from a courier for an Inbound.When requesting a pickup, please make sure to add the additional information required outlined below when creating the Inbound.This information is "PickupInfo" and must be added to the JSON request.If you are not selecting to use a pickup for your Inbound, you may add a Supplier Reference to the Inbound which will allow us to more easily identify your delivery when it arrives at our Warehouse. This could be your Purchase Order number with your supplier or the waybill number your supplier received from their courier, anything that will help us identify your Inbound when it arrives at the Warehouse.For now, this is not a required field, but we definitely do recommend adding it.
+Create Inbound Order
+Request ObjectInbound
+Field	Description	Type	Req	Example
+clientId	Your unique order id or reference	string	Y	PO-0001
+supplierReference	The reference you received from your supplier (Courier Waybill, Purchase Order Number)	string		PO-0001
+typeId	1: Inbound Stock, 3: RMA	numeric	Y	1
+deliveryInfo	See deliveryInfo	object	Y	
+items	See items	list of objects[1..99]	Y	
+pickupInfo	See pickupInfo	object		
+deliveryInfo
+Field	Description	Type	Req	Example
+customer	Customer's full name	string(50)	Y	John Doe
+estimatedArrivalDate	Estimated Arrival date for Inbound	date Format YYYYMMDD	Y	20140731
+pickupInfo
+Field	Description	Type	Req	Example
+recipient	Customer's full name	string(50)	Y	My Supplier
+companyName	Company name	string(50)		Best Supplier
+contactNo	Customer's contact number	numeric	Y	0123456789
+email	Customer's email	string(50)		best@supplier.com
+addressLine1	Address for pickup	string(50)	Y	1 Sandton Drive
+addressLine2	Additional address information	string(50)		Building 323
+suburb	Suburb for address of pickup	string(50)	Y	Sandton
+postalCode	Postal code for address of pickup	numeric	Y	2190
+pickupDate	Date you would like the Inbound picked up by the courier	date Format YYYYMMDD	Y	20140731
+parcelCount	Number of parcels the courier is collecting	numeric	Y	3
+totalMassG	Total weight of the pickup in grams	numeric	Y	1500
+items
+Field	Description	Type	Req	Example
+itemNo	Unique SKU	string(50)	Y	SKU-0001
+clientId	Your unique id for the item
+If set, qty must be 1	string(255)		123asd2132
+name	Item name	string(255)	Y	Whatnot
+imageURL	URL of the item image	string(255)		
+qty	Number per item	numeric	Y	3
+barcode	Barcode on the item	string(100)	Y	231312313
+costPrice	Cost price per item in Rands	numeric		35.50
+captureSerial	Serial number of items recorded at packing	boolean		
+captureExpiry	Expiry dates of items recorded at receiving	boolean		
+returnReason	If RMA, the reason for the return	string		Broken
+returnDetail	If RMA, the details for the return	string		Seal on box was broken
+unsellable	If RMA, whether item is unsellable or not	boolean		
+OutboundsOutbound Status CodesAwaiting stock (Code: 240)In picking queue (Code: 290)Ready to be picked (Code: 241)In packing queue (Code: 291)Ready to be packed (Code: 242)Awaiting courier pickup (Code: 243)Dispatched with courier (Code: 244)Scheduled for delivery with courier (Code: 300)Delivered (Code: 245)Awaiting collection (Code: 246)Collected (Code: 247)Unable to deliver (Code: 280)Order on hold (Code: 282)Unsuccessful (Code: 390)
+List of Outbounds
+Retrieve outbounds
+Returns a summary of outbounds.List of Outbounds Requiring Stock
+Retrieve outbounds requiring stock
+Returns a summary of outbounds that require stock and have no related Inbounds.Specific OutboundFind Outbounds by your own Outbound order numberIf you would like to find an outbound by your custom order number that you created it with, then you may include it as the value for the header X-Client-Id. This will override the regular id, which should still be passed an integer value, eg 0.
+Retrieve an outbound
+Returns a specific outbound with minimal data.
+Delete an outbound
+Deletes an outbound.Please first check the Outbound with event history. If the Event code list contains a 241 status code, it can not be cancelled.Prioritise Outbound
+Priortise an outbound
+Prioritises an outbound.Please first check the Outbound with event history. If the Event code list contains a 241 status code, it can not be prioritised.Please note extra charges apply when prioritising an Outbound.Specific Outbound with event history
+Retrieve an outbound with event history
+Returns an outbound with event history.Create OutboundWhen a new outbound is created, the internal id is returned in the header as x-parcelninja-outbound-id. This is the id that should be used when making lookup requests.LimitsThe total number of items per Outbound may not exceed 500 in quantityThe total number of unique SKU's per Outbound may not exceed 50PargoFor orders going with Pargo, you will need to add the following to the field companyName: "-pup2300"Eg. "companyName" : "THE COMPUTER SHOP - ST FRANCIS-pup4942"
+Create outbound
+Request ObjectOutbounds
+Field	Description	Type	Required	Example
+clientId	Your unique order id or reference	string	Y	CO-0001
+typeId	2: Customer Outbound Order, 4: Return Stock Order (RSO)	numeric	Y	2
+deliveryInfo	See deliveryInfo	object	Y	
+items	See items	list of objects[1..99]	Y	
+channelId	Indicate the outgoing channel (if any)	string		Channel1
+documents	Documents for printing	list of objects[1..99]		
+deliveryInfo
+Field	Description	Type	Req	Example
+customer	Customer's full name	string(30)	Y	John Doe
+companyName	Company name	string(20)		Parcelninja
+email	Customer's email address	string(100)		john@email.co.za
+contactNo	Customer's valid contact phone number	string(10)	Y	0111234567
+addressLine1	Address Line 1	string(50)	Y	10 Church Road
+addressLine2	Address Line 2	string(50)		
+suburb	Suburb	string(50)	Y	Bryanston
+postalCode	Postal Code	string(4)	Y	2196
+deliveryOption	see deliveryOption	object	Y	
+forCollection	Order to be collected at Warehouse. If deliveryQuoteId = 1 this will always be true. If this value is set to true but deliveryQuoteId isn't 1, this value will override deliveryQuoteId and the Outbound will be marked for collection	boolean		
+deliveryOption
+Field	Description	Type	Req	Example
+deliveryQuoteId	Delivery Quote Id from /api/v1/deliveryquote/, 0 to use cheapest delivery option or 1 to force collection option	numeric	Y	5
+SpecialServiceCode	With deliveryQuoteId=0, set this to 1 for Fastest or blank or 0 for Cheapest	numeric		1
+Items
+Field	Description	Type	Req	Example
+itemNo	Unique SKU	string(50)	Y	SKU-0001
+name	Item name	string(255)		Red Widget
+qty	Number per item	numeric	Y	3
+fromReserve	If true then allocate item from reserved stock	boolean		Default: false
+captureSerial	Capture item serial number at packing	boolean		Default: false
+Documents
+Field	Description	Type	Req	Example
+type	Type of document 0: unknown 1: Invoice 2: Notice 3: Packing slip	numeric	Y	0
+name	Document name	string(255)	Y	name.pdf
+url	Url to download document from	string(255)	Y if "data" is null or empty	http://www.yourServer.com/samples/pdf.pdf
+printCount	Number of prints required	numeric	Y	1
+printPlacement	How to place printed documents in/on the box 0: Inside & outside 1: Inside only 2: Outside only	numeric	Y	
+data	Document data	string(20000)	Y if "url" is null or empty	UTF-8 Base64 Encoded String of the Byte Array of the Document
+Add Document to OutboundYou are able to add/update a document that requires printing after an Outbound is created, as long as the status has not progressed to Ready to be packed (Code: 242) or further.
+Add Document to outbound
+Request Object
+Field	Description	Type	Req	Example
+reference	Outbound Reference	string	Y	Outbound001
+type	Type of document 0: unknown 1: Invoice 2: Notice 3: Packing slip	numeric	Y	0
+name	Document name	string(255)	Y	name.pdf
+url	Url to download document from	string(255)	Y if "data" is null or empty	http://www.yourServer.com/samples/pdf.pdf
+printCount	Number of prints required	numeric	Y	1
+printPlacement	How to place printed documents in/on the box 0: Inside & outside 1: Inside only 2: Outside only	numeric	Y	
+data	Document data	string(20000)	Y if "url" is null or empty	UTF-8 Base64 Encoded String of the Byte Array of the Document
+InventoryItems inside the Warehouse will be described by the following words. Inventory in a specific state have a specific meaning. The meanings are as follows:instock = Items are in the warehouse, have not been assigned to any orders and are available to be assigned.allocated = Items have been allocated to an Outbound order but have not yet been packed.unallocated = Outbound orders have been created for these items and there are none available or en route to the warehouse.onReorder = Items en route to the warehouse.broken = Items are broken and unsellable, can be returned to supplier.reserved = Items in the reserved pool.
+List of Inventory
+Retrieve full inventory
+Subset of InventoryThis endpoint allows you to retrieve information about a supplied list of SKUs. You can paginate, sort and filter these SKUs for easier view display.
+Retrieve a subset of inventory
+subset
+Field	Description	Type	Req	Example
+sortField	0: none, 1: itemNo, 2: itemName, 3: inStock, 4: allocated, 5: unallocated, 6: onReorder, 7: broken, 8: reserved, 9: costPrice	int		0
+sortDirection	The direction to sort by	string(4)		"asc" by Default
+fieldFilter	The field to filter by: 0: none, 1: instock, 2: allocated, 3: unallocated, 4: onReorder, 5: broken, 6: reserved	int		0
+skuList	A list of SKUs to search for	List(sku)	Y	[ { "itemNo": "123"}, ... ]
+Specific SKU
+Retrieve a single SKU
+Reserve Inventory
+Reserve inventory
+Request Objectreserve inventory
+Field	Description	Type	Req	Example
+itemNo	Item Number (SKU) for the product to reserve	string	Y	MN569955
+qty	The amount of stock to reserve	numeric	Y	5
+action	The action to perform 1: Add 2: Remove	numeric	Y	1
+Virtual SKUSVirtual SKUS are used to define two or more products that you want us to pick and pack at the time of shipment. Virtual SKUS are not pre-packaged items.This may be necessary in some of the following scenarios:Promotional bundles such as gift baskets made up of more than one item that are not delivered pre-assembled to a warehouse.Products you sell which are not stocked as a single pickable item (i.e. kits or cases of the same item), but are instead composed of several items that need to be picked.Please note that Virtual SKUS require a minimum of two SKUS in its product list when created or updated.Please also note that you may not create a Virtual SKU with a virtualSku of an existing inventory SKU.
+List Virtual SKUS
+Create Virtual SKU
+Create Virtual SKU
+Request ObjectVirtual Sku
+Field	Description	Type	Required	Example
+virtualSku	Your unique Virtual SKU, must not exist in Inventory	string	Y	BEDSANDBLANKETS
+description	Description of your Virtual SKU	string	Y	Beds and Blankets
+productList	See Product List	list of objects[1..99]	Y	
+Product List
+Field	Description	Type	Req	Example
+sku	SKU	string	Y	FANCYBED
+description	Description of SKU	string	Y	A really fancy bed
+quantity	Number of units	int	Y	1
+Get Specific Virtual SKU
+Get Specific Virtual SKU
+Update Virtual SKU
+Update Virtual SKU
+Delete Virtual SKU
+DELETE Virtual SKU
+Managed PickupsManaged Pickups is a new system we've developed to allow you to schedule a pickup with a courier that does not go to Parcelninja. These pickups are managed by Parcelninja and you can get tracking and events for the pickup, such as when it is collected and delivered. This is very useful for bypassing our warehouse and sending items directly back to the supplier for repairs.Please note: This feature is not available by default. You must request access to this feature.Managed Pickup Status CodesCreated (Code: 0)Submitted (Code: 1)Collected (Code: 3)Delivered (Code: 5)
+List of Managed Pickups
+Retrieve managed pickups
+Returns a summary of managed pickups.Specific Managed Pickup
+Retrieve a managed pickup
+Returns a specific managed pickup.
+Delete a managed pickup
+Deletes a managed pickup.Please note that you can only cancel the pickup until the day of the pickup.Specific Managed Pickup with event history
+Retrieve a managed pickup with event history
+Returns a managed pickup with event history.Create Managed PickupWhen a new managed pickup is created, the pickup id is returned in the header as x-parcelninja-pickup-id. This is the id that should be used when making lookup requests.LimitsIf the courier does not deliver to your destination address, you will not be able to create the pickup.
+Create Managed Pickup
+Request ObjectPickup
+Field	Description	Type	Required	Example
+reference	Your unique order id or reference	string	Y	CO-0001
+pickupDate	Date for the pickup to be executed on (must be 2 days in advance	date Format YYYY-MM-DD	Y	2018-11-30
+source	See deliveryInfo	object	Y	
+destination	See deliveryInfo	object	Y	
+deliveryInfo
+Field	Description	Type	Req	Example
+contactName	Customer's full name	string(30)	Y	John Doe
+businessName	Company name	string(20)		Parcelninja
+phone	Customer's valid contact phone number	string(10)	Y	0111234567
+addressLine1	Address Line 1	string(50)	Y	10 Church Road
+addressLine2	Address Line 2	string(50)		
+suburb	Suburb	string(50)	Y	Bryanston
+postCode	Postal Code	string(4)	Y	2196
+Delivery QuotingParcelninja allows you to request a granular list of delivery options from all of our integrated couriers. The returned delivery quotes are courier agnostic and guaranteed (if specified). Integrating stores may wish to calculate a delivery cost for an order before the order is paid for. This is done by first requesting the quote, then binding the quote to the outbound by including the returned quoteId of the particular quote.The recommended practice is to:Retrieve Delivery QuoteDisplay price to customer (if necessary)Create new Outbound using the corresponding DeliveryQuoteId of the returned Quote.Creating a new Outbound using a DeliveryQuoteId: 0 will cause a new quote (cheapest) to be internally generated when the Outbound is created.Please note: Postal Code is more important than Suburb. If Suburb and Postal Code do not match, we will use the Postal Code for the quote.This functionality also allows you to retrieve quotes for items that may not be in stock and for agnostic items (by simply supplying the dimensions). The following cases are supported:
+Case	Response	Guaranteed Price	Dates Shown
+1	All items are in stock.	Quote List with Nominated Options	Yes	Yes
+2	Some items are in stock and the ones not in stock have historical dimensions.	Quote List	Yes	No
+3	Some items are in stock and the ones not in stock don’t have historical dimensions (you supply them).	Quote List	No	No
+4	No items are in stock and only dimensions are provided.	Estimate List	No	No
+5	Some items aren't in stock and dimensions are not provided.	Error	.	.
+All returned quotes have a list of items, consider this example which contains a SKU that doesn't not have historical dimensions:{ 
+  ...
+
+  "items": [
+    {
+      "sku": "exampleSku1", 
+      "dimensions": {       
+        "length": 300,
+        "width": 200,
+        "height": 100,
+        "weight": 1500
+      },
+      "quantity": 20,
+      "fromReserve": false
+    },
+    {
+      ...
+    }
+  ]
+}
+Lengths are measured in mm, Weights in g. The startDate and endDate values returned are indicative of the service code used.Items in the Reserved PoolIf you'd like to request a Delivery Quote for currently reserved items, you must specify an additional item parameter, fromReserve: <true|false> which indicates that the supplied item quantity comes from the reserve pool. If omitted, fromReserve is implicitly assumed false.
+Get Delivery Quotes
+Get List of Delivery Quotes
+Return a granular list of delivery quotes ordered by the fastest option. In this case, some SKUs are out of stock but you have supplied dimensions, so this is Case 3 from above.Get Cheapest Delivery Quote
+Get Cheapest Delivery Quote
+Returns the cheapest delivery quote. In this case, some SKUs are out of stock but you have supplied dimensions, so this is Case 3 from above.Get Fastest Delivery Quote
+Get Fastest Delivery Quote
+Returns the fastest delivery quoteNominate Date / Check Delivery Quote
+Check Delivery Quote
+This end point has two major functions:1 - To check the information surrounding a delivery quote 2 - Nominate a date for a given nominated service offeringIn the first case, only the DeliveryQuoteId of interest need be provided and the related Delivery Quote object will be returnedIn the second case a nominated date must be provided along with a quoteId with the relevant service offering (e.g. if the nominated date is afterhours the quoteId must refer to an after hours service offering) , if this nominated date is fulfillable a new delivery quote will be generated and returned, if this is not possible an error message shall result instead.Please note this newly generated delivery quote may not be altered and must be used when creating an outbound. If a diffrent nominated date is required please use the original DeliveryQuoteId for that nominted service offering.
+Tracking
+Track waybill
+Track waybill
+Returns the last updated courier tracking status for a waybill.Track waybill with event history
+Track waybill with event history
+Returns the full courier tracking information for a waybill.
+LookupsNotes related resources of the Lookups API
+Order TypesWrite-up about order types
+Retrieve order types
+Event Status TypesReturns a list of event statuses
+Retrieve Event Statuses
+Suburbs and postal codesReturns all suburbs if search paramater not supplied
+Retrieve Suburbs and postal codes
+Logs
+Specific Log
+Retrieve a Log
+WebhooksWebhooks are created for all major events in the Parcelninja process. When an event occurs, a message is fired off to the custom URL defined below.We send callbacks for the following events:Inbound EventsAwaiting Arrival (Code: 200)Arrived at warehouse (Code: 201)Being Processed (Code: 202)Processing complete (Code: 203)Processing complete with variance (Code: 204)Outbound EventsAwaiting stock (Code: 240)In picking queue (Code: 290)Ready to be picked (Code: 241)In packing queue (Code: 291)Ready to be packed (Code: 242)Awaiting courier pickup (Code: 243)Dispatched with courier (Code: 244)Delivered (Code: 245)Awaiting collection (Code: 246)Collected (Code: 247)Unable to deliver (Code: 280)Order on hold (Code: 282)Unsuccessful (Code: 390)Courier Collection Unsuccessful (Code: 391)Courier Delivery Unsuccessful (Code: 392)A callback message send to hookUrl looks like this:{
+  "id": 12154235,
+  "clientId": "GHJLAOK987",
+  "type": {
+    "id": 2,
+    "description": "Order"
+  },
+  "timeStamp": "20210719062140",
+  "events": [
+    {
+      "code": 245,
+      "timeStamp": "20220225114251",
+      "description": "Delivered"
+    },
+    {
+      "code": 244,
+      "timeStamp": "20220224123933",
+      "description": "Dispatched with courier"
+    },
+    {
+      "code": 243,
+      "timeStamp": "20220224080032",
+      "description": "Awaiting courier pickup"
+    },
+    {
+      "code": 242,
+      "timeStamp": "20220224075937",
+      "description": "Ready to be packed"
+    },
+    {
+      "code": 291,
+      "timeStamp": "20220224073350",
+      "description": "In packing queue"
+    },
+    {
+      "code": 241,
+      "timeStamp": "20220224070015",
+      "description": "Ready to be picked"
+    },
+    {
+      "code": 240,
+      "timeStamp": "20220224065919",
+      "description": "Awaiting Stock"
+    },
+    {
+      "code": 290,
+      "timeStamp": "20220224065919",
+      "description": "In picking queue"
+    }
+  ],
+  "deliveryInfo": {
+    "trackingURL": "https://store.parcelninja.com/tracking.aspx?WaybillNo=PNJ12154235",
+    "waybillNumber": "PNJ12154235"
+  }
+}
+Create
+Create Callback Hook
+Set a custom URL that hooks should be sent to.JSON Fields
+Field	Description	Type	Req	Example
+hookUrl	URL of the service that hooks should be sent to	URL	Y	http://www.example.com
+Retrieve
+Retrieve Callback URL
+Retrieve the callback URL defined for a site.

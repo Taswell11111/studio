@@ -1,0 +1,23 @@
+rules_version = '2';
+
+/**
+ * @fileoverview
+ * This ruleset secures the Firebase Storage bucket.
+ *
+ * Security Strategy:
+ * - Read Access: Granted to any authenticated user. Since the application uses
+ *   anonymous authentication, any user actively using the app will be authenticated
+ *   and can therefore generate download URLs needed for the import process.
+ * - Write Access: Denied for all client-side operations. This is a critical
+ *   security measure to prevent unauthorized uploads or modifications directly
+ *   from the browser. All data should be added to storage via trusted server
+ *   processes if needed in the future.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
