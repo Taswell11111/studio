@@ -1,10 +1,10 @@
-'use client'
+'use client';
+
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 export function initializeFirebase() {
   if (!getApps().length) {
@@ -22,9 +22,11 @@ export function initializeFirebase() {
 
     // Initialize App Check
     if (typeof window !== 'undefined') {
-      initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaV3Provider('6LcNnycsAAAAACR2VukEvlvBgPDxVZEJKGCLgeKD'),
-        isTokenAutoRefreshEnabled: true
+      import('firebase/app-check').then(({ initializeAppCheck, ReCaptchaV3Provider }) => {
+        initializeAppCheck(firebaseApp, {
+          provider: new ReCaptchaV3Provider('6LcNnycsAAAAACR2VukEvlvBgPDxVZEJKGCLgeKD'),
+          isTokenAutoRefreshEnabled: true
+        });
       });
     }
 
