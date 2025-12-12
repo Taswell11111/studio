@@ -10,9 +10,8 @@ import {
 } from '@/firebase';
 import type { Shipment } from '@/types';
 import { importFromCsv } from '@/ai/flows/import-from-csv';
-import { importFromLocal } from '@/ai/flows/import-from-local';
 
-import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X, Files } from 'lucide-react';
+import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -112,22 +111,6 @@ export default function ShipmentDashboard() {
 
     event.target.value = '';
   };
-  
-  const handleLocalImport = () => {
-    startUploadTransition(async () => {
-      handleImportInitiated('Importing from Local File...');
-      try {
-        const result = await importFromLocal();
-        if (result.success) {
-          handleImportComplete(result.recordsImported, 'Local File');
-        } else {
-          throw new Error(result.message);
-        }
-      } catch (error: any) {
-        handleImportError(error.message, 'Local File');
-      }
-    });
-  };
 
   const handleShare = async () => {
     try {
@@ -156,7 +139,8 @@ export default function ShipmentDashboard() {
 
   const handleImportComplete = (count: number, source: string) => {
     setIsProcessing(false);
-    const message = `${count} records were successfully imported from ${source}.`;
+    const timestamp = new Date().toLocaleString();
+    const message = `${count} records were successfully imported from ${source} on ${timestamp}.`;
     setLastImportSummary(message);
     setSuccessMessage(message);
     setShowSuccess(true);
@@ -251,10 +235,6 @@ export default function ShipmentDashboard() {
             <Button variant="secondary" onClick={() => setImportFromSheetOpen(true)} disabled={isUploading}>
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Import from Google Sheet
-            </Button>
-             <Button variant="secondary" onClick={handleLocalImport} disabled={isUploading}>
-              <Files className="w-4 h-4 mr-2" />
-              Import from Local File
             </Button>
           </CardContent>
         </Card>
