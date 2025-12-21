@@ -67,6 +67,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
           continue;
         }
 
+        // Create a new entry if we haven't seen this shipment ID before
         if (!shipmentsMap.has(shipmentId)) {
           shipmentsMap.set(shipmentId, {
             id: shipmentId,
@@ -75,12 +76,14 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
           } as (Shipment | Inbound) & { items: ShipmentItem[] });
         }
 
+        // Get the aggregated shipment/inbound record
         const shipment = shipmentsMap.get(shipmentId)!;
         
+        // Add the current row's item details to the items array
         const item: ShipmentItem = {
           'Item Name': record['Item Name'] || 'N/A',
           'Quantity': parseInt(record['Quantity'], 10) || 0,
-          'SKU': record['SKU'] || 'N/A', // Assuming SKU might exist
+          'SKU': record['SKU'] || 'N/A',
         };
         shipment.items!.push(item);
       }
@@ -99,10 +102,19 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         const batchData = uniqueRecords.slice(i, i + BATCH_SIZE);
 
         for (const record of batchData) {
-          const isOutbound = String(record['Direction']).toLowerCase() === 'outbound';
+          // Normalize direction check
+          const isOutbound = String(record['Direction'] || '').trim().toLowerCase() === 'outbound';
+          const isİnbound = String(record['Direction'] || '').trim().toLowerCase() === 'inbound';
+          
+          if (!isOutbound && !isİnbound) {
+              console.warn(`Skipping record with invalid 'Direction': ${record['Direction']}`, record);
+              continue; // Skip records with no or invalid direction
+          }
+
           const collectionRef = isOutbound ? shipmentsColRef : inboundsColRef;
           const docRef = collectionRef.doc(record.id);
           
+          // Create a clean object to write, removing any undefined properties
           const dataToWrite = JSON.parse(JSON.stringify(record));
           batch.set(docRef, dataToWrite, { merge: true });
 
