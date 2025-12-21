@@ -18,7 +18,7 @@ const ImportFromCsvInputSchema = z.object({
 });
 export type ImportFromCsvInput = z.infer<typeof ImportFromCsvInputSchema>;
 
-const ImportFromCsvOutputSchema = z.object({
+export const ImportFromCsvOutputSchema = z.object({
   success: z.boolean(),
   recordsImported: z.number().describe('Total number of rows processed from the CSV.'),
   shipmentsCreated: z.number().describe('Number of unique shipment documents created.'),

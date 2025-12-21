@@ -6,8 +6,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { importFromCsv, type ImportFromCsvOutput } from './import-from-csv';
-import { importInboundFromCsv, type ImportInboundFromCsvOutput } from './import-inbound-from-csv';
+import { importFromCsv, ImportFromCsvOutputSchema, type ImportFromCsvOutput } from './import-from-csv';
+import { importInboundFromCsv, ImportInboundFromCsvOutputSchema, type ImportInboundFromCsvOutput } from './import-inbound-from-csv';
 
 const ImportShipmentDataInputSchema = z.object({
   csvText: z.string().describe('The raw text content of the CSV file.'),

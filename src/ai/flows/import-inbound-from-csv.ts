@@ -14,7 +14,7 @@ const ImportInboundFromCsvInputSchema = z.object({
 });
 export type ImportInboundFromCsvInput = z.infer<typeof ImportInboundFromCsvInputSchema>;
 
-const ImportInboundFromCsvOutputSchema = z.object({
+export const ImportInboundFromCsvOutputSchema = z.object({
   success: z.boolean(),
   recordsImported: z.number().describe('Total number of unique inbound shipments created.'),
   message: z.string(),
