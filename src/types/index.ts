@@ -1,9 +1,11 @@
 'use server';
+import { z } from 'zod';
 
 // A single item within a shipment
 export type ShipmentItem = {
   'Item Name': string;
   'Quantity': number;
+  'SKU'?: string;
   [key: string]: any;
 };
 
@@ -32,7 +34,7 @@ export type ShipmentRecord = {
   'State'?: string;
   'Country'?: string;
   'Pin Code'?: string;
-  items: ShipmentItem[];
+  items?: ShipmentItem[];
   [key: string]: any;
 };
 
@@ -41,3 +43,18 @@ export type Shipment = ShipmentRecord;
 
 // Type alias for clarity. Represents an inbound shipment/return.
 export type Inbound = ShipmentRecord;
+
+
+// Schema for CSV import flow
+export const ImportShipmentDataInputSchema = z.object({
+  csvText: z.string().describe('The raw text content of the CSV file.'),
+});
+export type ImportShipmentDataInput = z.infer<typeof ImportShipmentDataInputSchema>;
+
+export const ImportShipmentDataOutputSchema = z.object({
+  success: z.boolean(),
+  inboundsCreated: z.number().describe('Number of inbound records created.'),
+  outboundsCreated: z.number().describe('Number of outbound records created.'),
+  message: z.string(),
+});
+export type ImportShipmentDataOutput = z.infer<typeof ImportShipmentDataOutputSchema>;

@@ -7,25 +7,19 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import { parseCSV } from '@/lib/csv-parser';
-import type { Shipment, Inbound, ShipmentItem } from '@/types';
+import {
+  type Shipment,
+  type Inbound,
+  type ShipmentItem,
+  ImportShipmentDataInputSchema,
+  type ImportShipmentDataInput,
+  ImportShipmentDataOutputSchema,
+  type ImportShipmentDataOutput
+} from '@/types';
 
 const BATCH_SIZE = 400; // Firestore batch write limit is 500 operations
-
-const ImportShipmentDataInputSchema = z.object({
-  csvText: z.string().describe('The raw text content of the CSV file.'),
-});
-export type ImportShipmentDataInput = z.infer<typeof ImportShipmentDataInputSchema>;
-
-export const ImportShipmentDataOutputSchema = z.object({
-  success: z.boolean(),
-  inboundsCreated: z.number().describe('Number of inbound records created.'),
-  outboundsCreated: z.number().describe('Number of outbound records created.'),
-  message: z.string(),
-});
-export type ImportShipmentDataOutput = z.infer<typeof ImportShipmentDataOutputSchema>;
 
 export async function importShipmentDataFromCsv(input: ImportShipmentDataInput): Promise<ImportShipmentDataOutput> {
   return importShipmentDataFromCsvFlow(input);
@@ -52,16 +46,19 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
 
       // Check for required headers
       const headers = Object.keys(records[0] || {});
-      if (!headers.includes('Direction') || !headers.includes('Shipment ID')) {
+      const requiredHeaders = ['Direction', 'Shipment ID'];
+      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+
+      if (missingHeaders.length > 0) {
         return {
           success: false,
           inboundsCreated: 0,
           outboundsCreated: 0,
-          message: 'CSV must contain "Direction" and "Shipment ID" columns.',
+          message: `CSV is missing required columns: ${missingHeaders.join(', ')}.`,
         };
       }
-
-      const shipmentsMap = new Map<string, Shipment | Inbound>();
+      
+      const shipmentsMap = new Map<string, (Shipment | Inbound) & { items: ShipmentItem[] }>();
 
       for (const record of records) {
         const shipmentId = record['Shipment ID'];
@@ -75,7 +72,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
             id: shipmentId,
             ...record,
             items: [],
-          } as Shipment | Inbound);
+          } as (Shipment | Inbound) & { items: ShipmentItem[] });
         }
 
         const shipment = shipmentsMap.get(shipmentId)!;
@@ -83,7 +80,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         const item: ShipmentItem = {
           'Item Name': record['Item Name'] || 'N/A',
           'Quantity': parseInt(record['Quantity'], 10) || 0,
-          ...record,
+          'SKU': record['SKU'] || 'N/A', // Assuming SKU might exist
         };
         shipment.items!.push(item);
       }
@@ -98,33 +95,24 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
       let outboundsCreated = 0;
 
       for (let i = 0; i < uniqueRecords.length; i += BATCH_SIZE) {
-        const shipmentBatch = firestore.batch();
-        const inboundBatch = firestore.batch();
-        
+        const batch = firestore.batch();
         const batchData = uniqueRecords.slice(i, i + BATCH_SIZE);
-        let hasShipments = false;
-        let hasInbounds = false;
 
         for (const record of batchData) {
-          const docRef = record['Direction'].toLowerCase() === 'inbound'
-            ? inboundsColRef.doc(record.id)
-            : shipmentsColRef.doc(record.id);
-
+          const isOutbound = String(record['Direction']).toLowerCase() === 'outbound';
+          const collectionRef = isOutbound ? shipmentsColRef : inboundsColRef;
+          const docRef = collectionRef.doc(record.id);
+          
           const dataToWrite = JSON.parse(JSON.stringify(record));
+          batch.set(docRef, dataToWrite, { merge: true });
 
-          if (record['Direction'].toLowerCase() === 'inbound') {
-            inboundBatch.set(docRef, dataToWrite, { merge: true });
-            hasInbounds = true;
-            inboundsCreated++;
-          } else {
-            shipmentBatch.set(docRef, dataToWrite, { merge: true });
-            hasShipments = true;
+          if (isOutbound) {
             outboundsCreated++;
+          } else {
+            inboundsCreated++;
           }
         }
-        
-        if (hasShipments) await shipmentBatch.commit();
-        if (hasInbounds) await inboundBatch.commit();
+        await batch.commit();
       }
 
       const successMessage = `Successfully processed ${totalRows} rows. Created ${outboundsCreated} outbound shipments and ${inboundsCreated} inbound records.`;
