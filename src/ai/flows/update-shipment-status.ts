@@ -75,7 +75,7 @@ const updateShipmentStatusFlow = ai.defineFlow(
 
     try {
       // ParcelNinja API endpoint for tracking a waybill
-      const warehouseApiUrl = `https://www.parcelninja.co.za/api/v1/tracking/${trackingNo}`;
+      const warehouseApiUrl = `https://storeapi.parcelninja.com/api/v1/tracking/events/${trackingNo}`;
       
       // Encode credentials for Basic Authentication
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
@@ -99,13 +99,18 @@ const updateShipmentStatusFlow = ai.defineFlow(
       // Assuming ParcelNinja returns a structure like { "status": "DELIVERED", "events": [...] }
       // We need to extract the latest status from the events array if available, or a main status field.
       let newStatus: string | undefined;
-      if (data.events && data.events.length > 0) {
-        // Get the description of the most recent event
-        newStatus = data.events[data.events.length - 1].description; 
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Find the event with the latest timestamp
+        const latestEvent = data.reduce((latest, current) => {
+          const latestTime = new Date(latest.timeStamp).getTime();
+          const currentTime = new Date(current.timeStamp).getTime();
+          return currentTime > latestTime ? current : latest;
+        });
+        newStatus = latestEvent.description;
       } else if (data.status) {
-        // Fallback to a top-level status field if available
         newStatus = data.status;
       }
+
 
       if (!newStatus) {
          return { success: false, message: 'ParcelNinja API did not return a valid status or events.' };
@@ -113,7 +118,8 @@ const updateShipmentStatusFlow = ai.defineFlow(
 
       // Update the document in Firestore
       const { firestore } = initializeFirebaseOnServer();
-      const shipmentRef = firestore.collection('shipments').doc(shipmentId); // Using the direct collection path
+      const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+      const shipmentRef = firestore.collection(`artifacts/${appId}/public/data/shipments`).doc(shipmentId);
       
       await shipmentRef.update({
         'Status': newStatus,
