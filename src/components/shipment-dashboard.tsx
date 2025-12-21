@@ -1,23 +1,19 @@
-
 'use client';
 
-import React, { useState, useEffect, useMemo, useTransition, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useTransition } from 'react';
 import { useAuth, useFirestore, initiateAnonymousSignIn, useCollection, useMemoFirebase } from '@/firebase';
 import type { Shipment, Inbound } from '@/types';
 import { collection } from 'firebase/firestore';
 
 // Outbound flows
 import { importFromCsv } from '@/ai/flows/import-from-csv';
-import { clearShipmentData } from '@/ai/flows/clear-data';
 // Inbound flows
 import { importInboundFromCsv } from '@/ai/flows/import-inbound-from-csv';
-import { clearInboundData } from '@/ai/flows/clear-inbound-data';
 
-import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X, RefreshCw } from 'lucide-react';
+import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShipmentCard } from '@/components/shipment-card';
 import { InboundCard } from '@/components/inbound-card';
 import { ProcessingModal } from '@/components/processing-modal';
@@ -33,11 +29,10 @@ import { ClearDataButton } from './clear-data-button';
 export default function ShipmentDashboard() {
   const auth = useAuth();
   const firestore = useFirestore();
-  const [activeTab, setActiveTab] = useState<'outbound' | 'inbound'>('outbound');
   const [searchTerm, setSearchTerm] = useState('');
   
-  const [foundShipment, setFoundShipment] = useState<Shipment | null>(null);
-  const [foundInbound, setFoundInbound] = useState<Inbound | null>(null);
+  const [foundShipments, setFoundShipments] = useState<Shipment[]>([]);
+  const [foundInbounds, setFoundInbounds] = useState<Inbound[]>([]);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress] = useState<number | undefined>(0);
@@ -75,63 +70,61 @@ export default function ShipmentDashboard() {
 
   const resetSearch = () => {
     setSearchTerm('');
-    setFoundShipment(null);
-    setFoundInbound(null);
+    setFoundShipments([]);
+    setFoundInbounds([]);
   }
 
   useEffect(() => {
-    resetSearch();
-  }, [activeTab]);
-
-  useEffect(() => {
     if (!searchTerm) {
-      setFoundShipment(null);
-      setFoundInbound(null);
+      setFoundShipments([]);
+      setFoundInbounds([]);
       return;
     }
 
     const lowercasedTerm = searchTerm.toLowerCase();
     
-    if (activeTab === 'outbound' && allShipments) {
-      const found = allShipments.find(item =>
+    if (allShipments) {
+      const found = allShipments.filter(item =>
         Object.values(item).some(val =>
           String(val).toLowerCase().includes(lowercasedTerm)
         )
       );
-      setFoundShipment(found || null);
-    } else if (activeTab === 'inbound' && allInbounds) {
-      const found = allInbounds.find(item =>
-        Object.values(item).some(val =>
-          String(val).toLowerCase().includes(lowercasedTerm)
-        )
-      );
-      setFoundInbound(found || null);
+      setFoundShipments(found);
     }
-  }, [searchTerm, allShipments, allInbounds, activeTab]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (allInbounds) {
+      const found = allInbounds.filter(item =>
+        Object.values(item).some(val =>
+          String(val).toLowerCase().includes(lowercasedTerm)
+        )
+      );
+      setFoundInbounds(found);
+    }
+  }, [searchTerm, allShipments, allInbounds]);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, dataType: 'outbound' | 'inbound') => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     startUploadTransition(() => {
       setIsProcessing(true);
-      setProcessingTitle(`Uploading and Processing ${activeTab === 'outbound' ? 'Outbound' : 'Inbound'} CSV...`);
+      setProcessingTitle(`Uploading and Processing ${dataType === 'outbound' ? 'Outbound' : 'Inbound'} CSV...`);
 
       const reader = new FileReader();
       reader.onload = async (e) => {
         const csvText = e.target?.result as string;
         try {
-          const result = activeTab === 'outbound'
+          const result = dataType === 'outbound'
             ? await importFromCsv({ csvText })
             : await importInboundFromCsv({ csvText });
 
           if (result.success) {
-            handleImportComplete(result.recordsImported, `CSV File (${activeTab})`);
+            handleImportComplete(result.recordsImported, `CSV File (${dataType})`);
           } else {
             throw new Error(result.message);
           }
         } catch (error: any) {
-          handleImportError(error.message, `CSV File (${activeTab})`);
+          handleImportError(error.message, `CSV File (${dataType})`);
         } finally {
           setIsProcessing(false);
         }
@@ -180,19 +173,13 @@ export default function ShipmentDashboard() {
   };
   
   const isLoading = isLoadingShipments || isLoadingInbounds;
+  const totalItems = (allShipments?.length || 0) + (allInbounds?.length || 0);
 
-  const getCollectionStats = () => {
-    if (activeTab === 'outbound') {
-      return `Tracking ${allShipments?.length || 0} Shipment Items`;
-    }
-    return `Tracking ${allInbounds?.length || 0} Inbound Items`;
-  }
-  
   const renderContent = () => {
     if (isLoading) {
       return (
         <div className="text-center py-12 text-muted-foreground">
-          <p>Loading {activeTab} data...</p>
+          <p>Loading data...</p>
         </div>
       );
     }
@@ -200,19 +187,20 @@ export default function ShipmentDashboard() {
       return (
         <Card className="text-center py-12 text-muted-foreground border-dashed">
           <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-          Enter a search term above to find a {activeTab === 'outbound' ? 'shipment' : 'inbound order'}.
+          Enter a search term above to find a shipment or inbound order.
         </Card>
       );
     }
     
-    if (activeTab === 'outbound') {
-      if (foundShipment) {
-        return <ShipmentCard key={foundShipment.id} item={foundShipment} />;
-      }
-    } else { // inbound
-      if (foundInbound) {
-        return <InboundCard key={foundInbound.id} item={foundInbound} />;
-      }
+    const hasResults = foundShipments.length > 0 || foundInbounds.length > 0;
+
+    if (hasResults) {
+      return (
+        <>
+          {foundShipments.map(shipment => <ShipmentCard key={shipment.id} item={shipment} />)}
+          {foundInbounds.map(inbound => <InboundCard key={inbound.id} item={inbound} />)}
+        </>
+      );
     }
 
     return (
@@ -259,13 +247,13 @@ export default function ShipmentDashboard() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
                   <p className="text-xs text-muted-foreground font-medium">
-                    {isLoading ? 'Connecting...' : getCollectionStats()}
+                    {isLoading ? 'Connecting...' : `Tracking ${totalItems} Shipment Items`}
                   </p>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
-              {activeTab === 'outbound' && <RefreshAllButton />}
+              <RefreshAllButton />
               <Button variant="outline" onClick={handleShare}><Share2 /><span>Share Tool</span></Button>
             </div>
           </div>
@@ -286,59 +274,52 @@ export default function ShipmentDashboard() {
           )}
         </Card>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'outbound' | 'inbound')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="outbound">Outbound Shipments</TabsTrigger>
-            <TabsTrigger value="inbound">Inbound Shipments</TabsTrigger>
-          </TabsList>
-          <TabsContent value="outbound">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Admin: Import Outbound Data</CardTitle>
-                <CardDescription>
-                  Import outbound shipment data. This will overwrite all existing outbound records.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
-                <Button asChild variant="outline" disabled={isUploading}>
-                  <label htmlFor="csv-upload-outbound">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload CSV File
-                    <input type="file" id="csv-upload-outbound" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
-                  </label>
-                </Button>
-                <Button variant="secondary" onClick={() => setImportFromStorageOpen(true)} disabled={isUploading}>
-                  Import from Storage
-                </Button>
-                <Button variant="secondary" onClick={() => setImportFromSheetOpen(true)} disabled={isUploading}>
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Import from Google Sheet
-                </Button>
-                <ClearDataButton dataType="outbound" />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="inbound">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Admin: Import Inbound Data</CardTitle>
-                <CardDescription>
-                  Import inbound shipment data. This will overwrite all existing inbound records.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
-                <Button asChild variant="outline" disabled={isUploading}>
-                  <label htmlFor="csv-upload-inbound">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload CSV File
-                    <input type="file" id="csv-upload-inbound" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
-                  </label>
-                </Button>
-                <ClearDataButton dataType="inbound" />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Admin: Import Outbound Data</CardTitle>
+              <CardDescription>
+                Import outbound shipment data. This will overwrite all existing outbound records.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+              <Button asChild variant="outline" disabled={isUploading}>
+                <label htmlFor="csv-upload-outbound">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload CSV File
+                  <input type="file" id="csv-upload-outbound" className="hidden" accept=".csv" onChange={(e) => handleFileUpload(e, 'outbound')} disabled={isUploading} />
+                </label>
+              </Button>
+              <Button variant="secondary" onClick={() => setImportFromStorageOpen(true)} disabled={isUploading}>
+                Import from Storage
+              </Button>
+              <Button variant="secondary" onClick={() => setImportFromSheetOpen(true)} disabled={isUploading}>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Import from Google Sheet
+              </Button>
+              <ClearDataButton dataType="outbound" />
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Admin: Import Inbound Data</CardTitle>
+              <CardDescription>
+                Import inbound shipment data. This will overwrite all existing inbound records.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+              <Button asChild variant="outline" disabled={isUploading}>
+                <label htmlFor="csv-upload-inbound">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload CSV File
+                  <input type="file" id="csv-upload-inbound" className="hidden" accept=".csv" onChange={(e) => handleFileUpload(e, 'inbound')} disabled={isUploading} />
+                </label>
+              </Button>
+              <ClearDataButton dataType="inbound" />
+            </CardContent>
+          </Card>
+        </div>
         
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />

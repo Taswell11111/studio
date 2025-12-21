@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import type { Shipment, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
-import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList } from 'lucide-react';
+import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
@@ -94,6 +94,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     'Tracking No',
     'Tracking Link',
     'Status',
+    'Shipment ID',
     'Source Store Order ID',
     'Status Date',
     ...addressFields,
@@ -110,7 +111,13 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
       <CardHeader className="bg-secondary/50 p-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
-                <h2 className="font-mono font-bold text-2xl text-primary mt-1">{item['Source Store Order ID']}</h2>
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Shipment ID</p>
+                <h2 className="font-mono font-bold text-2xl text-primary mt-1">{item['Shipment ID']}</h2>
+                <div className="flex items-center gap-2 mt-2">
+                  <Building className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Source Store Order ID:</p>
+                  <p className="font-mono text-sm">{item['Source Store Order ID']}</p>
+                </div>
             </div>
             <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
@@ -170,8 +177,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
               {item.items.map((shipmentItem: ShipmentItem, index: number) => (
                 <div key={index} className="p-4 rounded-lg border bg-secondary/30">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <DetailItem icon={ShoppingBag} label="Item" value={shipmentItem['Item Name'] || 'N/A'} />
-                      <DetailItem icon={ClipboardList} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
+                      <DetailItem icon={ShoppingBag} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
                       <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
                   </div>
                 </div>
