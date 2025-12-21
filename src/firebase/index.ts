@@ -24,7 +24,7 @@ export function initializeFirebase() {
     if (typeof window !== 'undefined') {
       import('firebase/app-check').then(({ initializeAppCheck, ReCaptchaV3Provider }) => {
         initializeAppCheck(firebaseApp, {
-          provider: new ReCaptchaV3Provider('6LcNnycsAAAAACR2VukEvlvBgPDxVZEJKGCLgeKD'),
+          provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY!),
           isTokenAutoRefreshEnabled: true
         });
       });
