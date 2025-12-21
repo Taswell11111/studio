@@ -59,6 +59,11 @@ const updateShipmentStatusFlow = ai.defineFlow(
             apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD,
             storeId: process.env.SUPERDRY_WAREHOUSE_STORE_ID,
         },
+        'REEBOK': {
+            apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME,
+            apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD,
+            storeId: process.env.REEBOK_WAREHOUSE_STORE_ID,
+        },
     };
 
     // Select credentials based on the courier name (case-insensitive)
