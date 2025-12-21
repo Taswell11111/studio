@@ -50,8 +50,8 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
       const result = await importFromCsv({ csvText });
       return { ...result, dataType: 'outbound' };
 
-    } else if (headers.includes('clientid')) {
-      // This is an inbound shipment file
+    } else if (headers.includes('return id')) {
+      // This is an inbound shipment file (return)
       console.log("Detected inbound shipment data.");
       const result = await importInboundFromCsv({ csvText });
       return { ...result, dataType: 'inbound' };
@@ -60,7 +60,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
       console.error("Could not determine CSV type. Headers found:", headers);
       return {
         success: false,
-        message: 'Could not determine data type. Please ensure headers include either "Source Store Order ID" (for outbound) or "clientId" (for inbound).',
+        message: 'Could not determine data type. Please ensure headers include either "Source Store Order ID" (for outbound) or "Return ID" (for inbound).',
         dataType: 'unknown',
       };
     }

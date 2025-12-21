@@ -1,4 +1,5 @@
 
+
 export type ShipmentItem = {
   'Item Name': string;
   [key: string]: any;
@@ -18,20 +19,27 @@ export type Shipment = {
 };
 
 export type InboundItem = {
-  itemNo: string;
-  name: string;
-  qty: number;
-  barcode?: string;
+  'Item Name': string;
+  'Quantity': number;
   [key: string]: any;
 };
 
 export type Inbound = {
-  id: string; // Will use clientId from the data as the document ID
-  clientId: string;
-  supplierReference?: string;
-  typeId: number;
-  customer: string;
-  estimatedArrivalDate: string;
+  id: string; // Will use 'Return ID' from data as the document ID
+  'Return ID': string;
+  'Source Store order Id'?: string;
+  'Source Shipment ID'?: string;
+  'Reference'?: string;
+  'Return Date'?: string;
+  'Shipping Type'?: string;
+  'Tracking No'?: string;
+  'Courier'?: string;
+  'Status'?: string;
+  'Status Date'?: string;
+  'Fulfilment Center'?: string;
+  'Customer Name'?: string;
+  'Address Line 1'?: string;
+  'Pin Code'?: string;
   items: InboundItem[];
   [key: string]: any;
 };

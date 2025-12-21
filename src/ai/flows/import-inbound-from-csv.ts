@@ -38,35 +38,41 @@ const importInboundFromCsvFlow = ai.defineFlow(
         return { success: false, recordsImported: 0, message: 'CSV file is empty or could not be parsed.' };
       }
 
-      // Group records by 'clientId' which represents a single inbound order
       const inboundsMap = new Map<string, Inbound>();
 
       for (const record of records) {
-        const clientId = record['clientId'];
-        if (!clientId) {
-          console.warn("Skipping record with no 'clientId':", record);
+        const returnId = record['Return ID'];
+        if (!returnId) {
+          console.warn("Skipping record with no 'Return ID':", record);
           continue;
         }
 
-        if (!inboundsMap.has(clientId)) {
-          inboundsMap.set(clientId, {
-            id: clientId,
-            clientId: clientId,
-            supplierReference: record['supplierReference'],
-            typeId: parseInt(record['typeId'], 10),
-            customer: record['customer'],
-            estimatedArrivalDate: record['estimatedArrivalDate'],
+        if (!inboundsMap.has(returnId)) {
+          inboundsMap.set(returnId, {
+            id: returnId,
+            'Return ID': returnId,
+            'Source Store order Id': record['Source Store order Id'],
+            'Source Shipment ID': record['Source Shipment ID'],
+            'Reference': record['Reference'],
+            'Return Date': record['Return Date'],
+            'Shipping Type': record['Shipping Type'],
+            'Tracking No': record['Tracking No'],
+            'Courier': record['Courier'],
+            'Status': record['Status'],
+            'Status Date': record['Status Date'],
+            'Fulfilment Center': record['Fulfilment Center'],
+            'Customer Name': record['Customer Name'],
+            'Address Line 1': record['Address Line 1'],
+            'Pin Code': record['Pin Code'],
             items: [],
           });
         }
 
-        const inboundOrder = inboundsMap.get(clientId)!;
+        const inboundOrder = inboundsMap.get(returnId)!;
         
         const item: InboundItem = {
-          itemNo: record['itemNo'],
-          name: record['name'],
-          qty: parseInt(record['qty'], 10),
-          barcode: record['barcode'],
+          'Item Name': record['Item Name'],
+          'Quantity': parseInt(record['Quantity'], 10) || 1,
         };
         inboundOrder.items.push(item);
       }
