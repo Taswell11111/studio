@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import type { Shipment } from '@/types';
+import type { Shipment, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
-import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, ShoppingBag, Info, Hash, MapPin, Package, ClipboardList } from 'lucide-react';
+import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
@@ -83,12 +83,11 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
   };
   
   const trackingLink = getTrackingLink(item);
-
   const addressFields = ['Address Line 1', 'Address Line 2', 'City', 'State', 'Pin Code', 'Country'];
-  const itemFields = ['Item Name', 'SKU', 'Quantity'];
 
   const excludedKeys = [
     'id',
+    'items',
     'Customer Name',
     'Order Date',
     'Courier',
@@ -96,10 +95,8 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     'Tracking Link',
     'Status',
     'Source Store Order ID',
-    'Shipment ID',
     'Status Date',
     ...addressFields,
-    ...itemFields,
   ];
 
   const otherDetails = Object.keys(item).filter(
@@ -113,11 +110,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
       <CardHeader className="bg-secondary/50 p-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
-                <h2 className="font-mono font-bold text-2xl text-primary mt-1">{item['Shipment ID'] || 'N/A'}</h2>
-                <div className="flex items-start gap-3 text-sm mt-2">
-                    <span className="font-semibold text-muted-foreground">Source Order ID:</span>
-                    <span className="font-mono text-sm text-foreground">{item['Source Store Order ID']}</span>
-                </div>
+                <h2 className="font-mono font-bold text-2xl text-primary mt-1">{item['Source Store Order ID']}</h2>
             </div>
             <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-2">
@@ -167,16 +160,25 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
         </div>
         
         {/* Item Details */}
-        <div className="md:col-span-1 lg:col-span-3 pt-6 border-t">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            Item Details
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <DetailItem icon={ShoppingBag} label="SKU" value={item['Item Name'] || 'N/A'} />
-            <DetailItem icon={Hash} label="Quantity" value={item['Quantity'] || '1'} />
+        {item.items && item.items.length > 0 && (
+          <div className="md:col-span-2 lg:col-span-3 pt-6 border-t">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Items in Shipment ({item.items.length})
+            </h3>
+            <div className="space-y-4">
+              {item.items.map((shipmentItem: ShipmentItem, index: number) => (
+                <div key={index} className="p-4 rounded-lg border bg-secondary/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <DetailItem icon={ShoppingBag} label="Item" value={shipmentItem['Item Name'] || 'N/A'} />
+                      <DetailItem icon={ClipboardList} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
+                      <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Address Details */}
         {addressDetails.length > 0 && (
@@ -188,14 +190,13 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
                 <div className="text-foreground font-medium space-y-0.5">
                     <p>{item['Address Line 1']}</p>
                     {item['Address Line 2'] && <p>{item['Address Line 2']}</p>}
-                    <p>{item['State']}</p>
-                    <p>{item['Pin Code']}</p>
+                    <p>{item['City']}, {item['State']} {item['Pin Code']}</p>
                     <p>{item['Country']}</p>
                 </div>
             </div>
         )}
         
-        {/* Other Details */}
+        {/* Other Top-Level Details */}
         {otherDetails.length > 0 && (
             <div className="md:col-span-2 lg:col-span-3 pt-6 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">

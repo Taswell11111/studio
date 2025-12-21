@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Shipment": {
@@ -56,6 +57,49 @@
         "trackingLink",
         "status"
       ]
+    },
+    "Inbound": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Inbound Shipment",
+      "type": "object",
+      "description": "Represents an inbound shipment record, such as stock from a supplier.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the inbound record, typically the client's order ID."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The client's unique order ID or reference for the inbound shipment."
+        },
+        "supplierReference": {
+          "type": "string",
+          "description": "Reference from the supplier, like a PO number or waybill."
+        },
+        "customer": {
+          "type": "string",
+          "description": "Name of the customer or source for the inbound shipment."
+        },
+        "estimatedArrivalDate": {
+          "type": "string",
+          "description": "The expected arrival date of the shipment.",
+          "format": "date"
+        },
+        "items": {
+          "type": "array",
+          "description": "A list of items included in the inbound shipment.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "itemNo": { "type": "string" },
+              "name": { "type": "string" },
+              "qty": { "type": "number" }
+            },
+            "required": ["itemNo", "name", "qty"]
+          }
+        }
+      },
+      "required": ["id", "clientId", "customer", "estimatedArrivalDate", "items"]
     }
   },
   "auth": {
@@ -73,7 +117,7 @@
           "schema": {
             "$ref": "#/backend/entities/Shipment"
           },
-          "description": "Stores all shipment records. The 'appId' parameter allows for namespacing data for different application instances. The 'shipmentId' is a concatenation of Source Store Order ID and Item Name. All data in this collection is publicly accessible.",
+          "description": "Stores all outbound shipment records. The 'appId' parameter allows for namespacing data for different application instances. The 'shipmentId' is a concatenation of Source Store Order ID and Item Name. All data in this collection is publicly accessible.",
           "params": [
             {
               "name": "appId",
@@ -85,8 +129,28 @@
             }
           ]
         }
+      },
+      {
+        "path": "artifacts/{appId}/public/data/inbounds/{inboundId}",
+        "definition": {
+          "entityName": "Inbound",
+          "schema": {
+            "$ref": "#/backend/entities/Inbound"
+          },
+          "description": "Stores all inbound shipment records. The 'appId' parameter allows for namespacing data. The 'inboundId' is the client's order ID. All data is publicly accessible.",
+          "params": [
+            {
+              "name": "appId",
+              "description": "The application ID for data segregation."
+            },
+            {
+              "name": "inboundId",
+              "description": "The unique ID of the inbound shipment, from the client's PO or reference. This serves as the document ID."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to support the ShipmentLook application. The primary entity, `Shipment`, is stored in a publicly accessible collection within an `artifacts` document. The structure emphasizes ease of access for anonymous users and real-time updates. The key to authorization independence is that all data is considered public; there are no user-specific private data collections, thus eliminating the need for complex authorization rules based on user identity or ownership. Since all the data in the collection has the same security posture (public read access), this inherently addresses structural segregation. The structure inherently supports QAPs for listing all shipments, as there are no additional rules restricting access based on user roles or ownership. The application ID `__app_id` is incorporated into the path to allow for multiple application instances sharing the same database.\n"
+    "reasoning": "The Firestore structure is designed to support both outbound (Shipment) and inbound (Inbound) lookups. Data is segregated into two top-level collections under `artifacts/{appId}/public/data/`: `shipments` and `inbounds`. This separation is clean and scalable. All data is considered public for anonymous read access, simplifying security rules. Writes are restricted to authenticated users (via the app's anonymous sign-in), allowing client-side data management. The `appId` ensures multi-tenancy if needed."
   }
 }

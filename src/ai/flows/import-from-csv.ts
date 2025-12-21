@@ -2,18 +2,16 @@
 
 /**
  * @fileOverview A Genkit flow to import shipment data from a raw CSV text string.
- *
- * - importFromCsv - A function that parses CSV text and imports it into Firestore.
- * - ImportFromCsvInput - The input type for the importFromCsv function.
- * - ImportFromCsvOutput - The return type for the importFromCsv function.
+ * This version consolidates multiple CSV rows with the same order ID into a single shipment document.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import { parseCSV } from '@/lib/csv-parser';
+import { Shipment, ShipmentItem } from '@/types';
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 400; // Firestore batch limit is 500 operations
 
 const ImportFromCsvInputSchema = z.object({
   csvText: z.string().describe('The raw text content of the CSV file.'),
@@ -22,7 +20,8 @@ export type ImportFromCsvInput = z.infer<typeof ImportFromCsvInputSchema>;
 
 const ImportFromCsvOutputSchema = z.object({
   success: z.boolean(),
-  recordsImported: z.number(),
+  recordsImported: z.number().describe('Total number of rows processed from the CSV.'),
+  shipmentsCreated: z.number().describe('Number of unique shipment documents created.'),
   message: z.string(),
 });
 export type ImportFromCsvOutput = z.infer<typeof ImportFromCsvOutputSchema>;
@@ -41,36 +40,70 @@ const importFromCsvFlow = ai.defineFlow(
     try {
       // 1. Parse the CSV data
       const records = parseCSV(csvText);
-      if (records.length === 0) {
-        return { success: false, recordsImported: 0, message: 'CSV file is empty or could not be parsed.' };
+      const totalRows = records.length;
+      if (totalRows === 0) {
+        return { success: false, recordsImported: 0, shipmentsCreated: 0, message: 'CSV file is empty or could not be parsed.' };
+      }
+
+      // 2. Consolidate records into unique shipments by 'Source Store Order ID'
+      const shipmentsMap = new Map<string, Partial<Shipment>>();
+
+      for (const record of records) {
+        const orderId = record['Source Store Order ID'];
+        if (!orderId) {
+          console.warn("Skipping record with no 'Source Store Order ID':", record);
+          continue;
+        }
+
+        if (!shipmentsMap.has(orderId)) {
+          shipmentsMap.set(orderId, {
+            id: orderId,
+            'Source Store Order ID': orderId,
+            'Status': record['Status'],
+            'Customer Name': record['Customer Name'],
+            'Order Date': record['Order Date'],
+            'Courier': record['Courier'],
+            'Tracking No': record['Tracking No'],
+            'Tracking Link': record['Tracking Link'],
+            items: [],
+          });
+        }
+
+        const shipment = shipmentsMap.get(orderId)!;
+        
+        const item: ShipmentItem = {
+          'Item Name': record['Item Name'] || 'N/A',
+          ...record
+        };
+        shipment.items!.push(item);
       }
       
+      // 3. Batch write to Firestore
       const { firestore } = initializeFirebaseOnServer();
       const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
       const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
+      
+      const uniqueShipments = Array.from(shipmentsMap.values());
 
-      // 2. Batch write to Firestore
-      for (let i = 0; i < records.length; i += BATCH_SIZE) {
+      for (let i = 0; i < uniqueShipments.length; i += BATCH_SIZE) {
         const batch = firestore.batch();
-        const batchData = records.slice(i, i + BATCH_SIZE);
+        const batchData = uniqueShipments.slice(i, i + BATCH_SIZE);
 
-        for (const record of batchData) {
-          // Use 'Source Store Order ID' and 'Item Name' as they appear in the CSV header.
-          const shipmentId = `${record['Source Store Order ID']}-${record['Item Name']}`;
-          if (!shipmentId || shipmentId === '-') {
-            console.warn("Skipping record with invalid ID in CSV import:", record);
-            continue;
-          }
-          const docRef = shipmentsColRef.doc(shipmentId);
-          batch.set(docRef, record, { merge: true });
+        for (const shipment of batchData) {
+          const docRef = shipmentsColRef.doc(shipment.id!);
+          batch.set(docRef, shipment, { merge: true });
         }
         await batch.commit();
       }
 
+      const shipmentsCreatedCount = uniqueShipments.length;
+      const successMessage = `Successfully processed ${totalRows} rows and created ${shipmentsCreatedCount} unique shipments.`;
+
       return {
         success: true,
-        recordsImported: records.length,
-        message: 'Successfully imported records from CSV.',
+        recordsImported: totalRows,
+        shipmentsCreated: shipmentsCreatedCount,
+        message: successMessage,
       };
 
     } catch (error: any) {
@@ -78,6 +111,7 @@ const importFromCsvFlow = ai.defineFlow(
       return {
         success: false,
         recordsImported: 0,
+        shipmentsCreated: 0,
         message: error.message || 'An unexpected error occurred during CSV import.',
       };
     }

@@ -1,36 +1,46 @@
+
 'use client';
 
-import React, { useState, useEffect, useMemo, useTransition } from 'react';
-import {
-  useAuth,
-  useFirestore,
-  initiateAnonymousSignIn,
-  useCollection,
-  useMemoFirebase
-} from '@/firebase';
-import type { Shipment } from '@/types';
-import { importFromCsv } from '@/ai/flows/import-from-csv';
+import React, { useState, useEffect, useMemo, useTransition, useCallback } from 'react';
+import { useAuth, useFirestore, initiateAnonymousSignIn, useCollection, useMemoFirebase } from '@/firebase';
+import type { Shipment, Inbound } from '@/types';
+import { collection } from 'firebase/firestore';
 
-import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X } from 'lucide-react';
+// Outbound flows
+import { importFromCsv } from '@/ai/flows/import-from-csv';
+import { clearShipmentData } from '@/ai/flows/clear-data';
+// Inbound flows
+import { importInboundFromCsv } from '@/ai/flows/import-inbound-from-csv';
+import { clearInboundData } from '@/ai/flows/clear-inbound-data';
+
+import { Search, Upload, AlertCircle, CloudLightning, Share2, FileSpreadsheet, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShipmentCard } from '@/components/shipment-card';
+import { InboundCard } from '@/components/inbound-card';
 import { ProcessingModal } from '@/components/processing-modal';
 import { SuccessNotification } from '@/components/success-notification';
 import { ImportFromStorageDialog } from '@/components/import-from-storage-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { collection } from 'firebase/firestore';
 import { ImportFromGoogleSheetDialog } from './import-from-google-sheet-dialog';
 import { Alert, AlertDescription } from './ui/alert';
+import { RefreshAllButton } from './refresh-all-button';
+import { ClearDataButton } from './clear-data-button';
+
 
 export default function ShipmentDashboard() {
   const auth = useAuth();
   const firestore = useFirestore();
+  const [activeTab, setActiveTab] = useState<'outbound' | 'inbound'>('outbound');
   const [searchTerm, setSearchTerm] = useState('');
+  
   const [foundShipment, setFoundShipment] = useState<Shipment | null>(null);
+  const [foundInbound, setFoundInbound] = useState<Inbound | null>(null);
+  
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState<number | undefined>(0);
+  const [processingProgress] = useState<number | undefined>(0);
   const [processingTitle, setProcessingTitle] = useState('Processing File');
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -43,70 +53,90 @@ export default function ShipmentDashboard() {
   
   const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
+  // Firestore refs
   const shipmentsColRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'artifacts', appId, 'public', 'data', 'shipments') : null),
     [firestore, appId]
   );
+  const inboundsColRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'artifacts', appId, 'public', 'data', 'inbounds') : null),
+    [firestore, appId]
+  );
   
-  const { data: allShipments, isLoading } = useCollection<Shipment>(shipmentsColRef);
+  // Data hooks
+  const { data: allShipments, isLoading: isLoadingShipments } = useCollection<Shipment>(shipmentsColRef);
+  const { data: allInbounds, isLoading: isLoadingInbounds } = useCollection<Inbound>(inboundsColRef);
 
   useEffect(() => {
-    if (isLoading) {
-      console.log('Loading initial shipment data from Firestore...');
-    } else {
-      console.log(`Initial data load complete. Found ${allShipments?.length || 0} shipments.`);
-    }
-  }, [isLoading, allShipments]);
-
-  useEffect(() => {
-    if (auth && !auth.currentUser && !isLoading) {
+    if (auth && !auth.currentUser && !isLoadingShipments) {
       initiateAnonymousSignIn(auth);
     }
-  }, [auth, isLoading]);
+  }, [auth, isLoadingShipments]);
+
+  const resetSearch = () => {
+    setSearchTerm('');
+    setFoundShipment(null);
+    setFoundInbound(null);
+  }
 
   useEffect(() => {
-    if (searchTerm && allShipments) {
-      const lowercasedTerm = searchTerm.toLowerCase();
+    resetSearch();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!searchTerm) {
+      setFoundShipment(null);
+      setFoundInbound(null);
+      return;
+    }
+
+    const lowercasedTerm = searchTerm.toLowerCase();
+    
+    if (activeTab === 'outbound' && allShipments) {
       const found = allShipments.find(item =>
         Object.values(item).some(val =>
           String(val).toLowerCase().includes(lowercasedTerm)
         )
       );
       setFoundShipment(found || null);
-    } else {
-      setFoundShipment(null);
+    } else if (activeTab === 'inbound' && allInbounds) {
+      const found = allInbounds.find(item =>
+        Object.values(item).some(val =>
+          String(val).toLowerCase().includes(lowercasedTerm)
+        )
+      );
+      setFoundInbound(found || null);
     }
-  }, [searchTerm, allShipments]);
+  }, [searchTerm, allShipments, allInbounds, activeTab]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     startUploadTransition(() => {
-        setIsProcessing(true);
-        setProcessingProgress(undefined);
-        setProcessingTitle('Uploading and Processing CSV...');
-        console.log(`Starting CSV upload for file: ${file.name}`);
+      setIsProcessing(true);
+      setProcessingTitle(`Uploading and Processing ${activeTab === 'outbound' ? 'Outbound' : 'Inbound'} CSV...`);
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const csvText = e.target?.result as string;
-            try {
-                const result = await importFromCsv({ csvText });
-                if (result.success) {
-                    console.log(`CSV import successful. ${result.recordsImported} records processed.`);
-                    handleImportComplete(result.recordsImported, 'CSV File');
-                } else {
-                    throw new Error(result.message);
-                }
-            } catch (error: any) {
-                console.error("Error processing CSV:", error);
-                handleImportError(error.message || "An unexpected error occurred during import.", 'CSV File');
-            } finally {
-                setIsProcessing(false);
-            }
-        };
-        reader.readAsText(file);
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const csvText = e.target?.result as string;
+        try {
+          const result = activeTab === 'outbound'
+            ? await importFromCsv({ csvText })
+            : await importInboundFromCsv({ csvText });
+
+          if (result.success) {
+            handleImportComplete(result.recordsImported, `CSV File (${activeTab})`);
+          } else {
+            throw new Error(result.message);
+          }
+        } catch (error: any) {
+          handleImportError(error.message, `CSV File (${activeTab})`);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+      reader.readAsText(file);
     });
 
     event.target.value = '';
@@ -119,7 +149,6 @@ export default function ShipmentDashboard() {
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to copy: ', err);
       toast({
         variant: "destructive",
         title: "Copy Failed",
@@ -131,10 +160,8 @@ export default function ShipmentDashboard() {
   const handleImportInitiated = (title: string) => {
     setLastImportSummary(null);
     setIsProcessing(true);
-    setProcessingProgress(undefined);
     setProcessingTitle(title);
-    setFoundShipment(null);
-    setSearchTerm('');
+    resetSearch();
   };
 
   const handleImportComplete = (count: number, source: string) => {
@@ -151,6 +178,50 @@ export default function ShipmentDashboard() {
     setIsProcessing(false);
     toast({ variant: 'destructive', title: `${source} Import Failed`, description: err });
   };
+  
+  const isLoading = isLoadingShipments || isLoadingInbounds;
+
+  const getCollectionStats = () => {
+    if (activeTab === 'outbound') {
+      return `Tracking ${allShipments?.length || 0} Shipment Items`;
+    }
+    return `Tracking ${allInbounds?.length || 0} Inbound Items`;
+  }
+  
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>Loading {activeTab} data...</p>
+        </div>
+      );
+    }
+    if (!searchTerm) {
+      return (
+        <Card className="text-center py-12 text-muted-foreground border-dashed">
+          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          Enter a search term above to find a {activeTab === 'outbound' ? 'shipment' : 'inbound order'}.
+        </Card>
+      );
+    }
+    
+    if (activeTab === 'outbound') {
+      if (foundShipment) {
+        return <ShipmentCard key={foundShipment.id} item={foundShipment} />;
+      }
+    } else { // inbound
+      if (foundInbound) {
+        return <InboundCard key={foundInbound.id} item={foundInbound} />;
+      }
+    }
+
+    return (
+       <Card className="text-center py-12 text-muted-foreground border-dashed">
+         <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+         {`No order found for "${searchTerm}". Please try a different search term.`}
+       </Card>
+    );
+  }
 
   return (
     <>
@@ -188,12 +259,13 @@ export default function ShipmentDashboard() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
                   <p className="text-xs text-muted-foreground font-medium">
-                    {isLoading ? 'Connecting...' : `Tracking ${allShipments?.length || 0} Shipment Items`}
+                    {isLoading ? 'Connecting...' : getCollectionStats()}
                   </p>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
+              {activeTab === 'outbound' && <RefreshAllButton />}
               <Button variant="outline" onClick={handleShare}><Share2 /><span>Share Tool</span></Button>
             </div>
           </div>
@@ -214,30 +286,59 @@ export default function ShipmentDashboard() {
           )}
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Admin: Import Data</CardTitle>
-            <CardDescription>
-              For large files, use cloud storage options. Use local options for development or smaller datasets.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
-            <Button asChild variant="outline" disabled={isUploading}>
-              <label htmlFor="csv-upload">
-                <Upload className="w-4 h-4 mr-2" />
-                Upload CSV File
-                <input type="file" id="csv-upload" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
-              </label>
-            </Button>
-            <Button variant="secondary" onClick={() => setImportFromStorageOpen(true)} disabled={isUploading}>
-              Import from Storage
-            </Button>
-            <Button variant="secondary" onClick={() => setImportFromSheetOpen(true)} disabled={isUploading}>
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Import from Google Sheet
-            </Button>
-          </CardContent>
-        </Card>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'outbound' | 'inbound')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="outbound">Outbound Shipments</TabsTrigger>
+            <TabsTrigger value="inbound">Inbound Shipments</TabsTrigger>
+          </TabsList>
+          <TabsContent value="outbound">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Admin: Import Outbound Data</CardTitle>
+                <CardDescription>
+                  Import outbound shipment data. This will overwrite all existing outbound records.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+                <Button asChild variant="outline" disabled={isUploading}>
+                  <label htmlFor="csv-upload-outbound">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload CSV File
+                    <input type="file" id="csv-upload-outbound" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
+                  </label>
+                </Button>
+                <Button variant="secondary" onClick={() => setImportFromStorageOpen(true)} disabled={isUploading}>
+                  Import from Storage
+                </Button>
+                <Button variant="secondary" onClick={() => setImportFromSheetOpen(true)} disabled={isUploading}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Import from Google Sheet
+                </Button>
+                <ClearDataButton dataType="outbound" />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="inbound">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Admin: Import Inbound Data</CardTitle>
+                <CardDescription>
+                  Import inbound shipment data. This will overwrite all existing inbound records.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+                <Button asChild variant="outline" disabled={isUploading}>
+                  <label htmlFor="csv-upload-inbound">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload CSV File
+                    <input type="file" id="csv-upload-inbound" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
+                  </label>
+                </Button>
+                <ClearDataButton dataType="inbound" />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
         
         <div className="relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -250,31 +351,10 @@ export default function ShipmentDashboard() {
           />
         </div>
         
-        {isLoading && (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>Loading shipment data...</p>
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-4">
+          {renderContent()}
+        </div>
 
-        {!isLoading && !searchTerm && (
-          <Card className="text-center py-12 text-muted-foreground border-dashed">
-            <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            Enter a search term above to find a shipment.
-          </Card>
-        )}
-
-        {searchTerm && !isLoading && !foundShipment && (
-           <Card className="text-center py-12 text-muted-foreground border-dashed">
-             <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-             {`No order found for "${searchTerm}". Please try a different search term.`}
-           </Card>
-        )}
-
-        {foundShipment && (
-          <div className="grid grid-cols-1 gap-4">
-            <ShipmentCard key={foundShipment.id} item={foundShipment} />
-          </div>
-        )}
       </div>
     </>
   );

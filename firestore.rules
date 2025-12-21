@@ -1,33 +1,35 @@
+
 /**
  * Core Philosophy: This ruleset enforces a public read-only data model for
  * unauthenticated users, but allows authenticated users (including anonymous ones)
  * to write data. This is designed for applications where data is managed by
  * client applications and read by the public.
  *
- * Data Structure: All application data is nested under the `/artifacts/{appId}`
+ * Data Structure: All application data is nested under the `/artifacts/{appId}/public/data`
  * path, which allows for data segregation between different application instances
  * or environments (e.g., staging vs. production) within the same Firestore project.
- * The shipment data itself is located at `/artifacts/{appId}/public/data/shipments`.
+ * The data is further split into `shipments` (outbound) and `inbounds`.
  *
  * Key Security Decisions:
- * - Public Read Access: All documents within the `shipments` collection are publicly
- *   readable by anyone, including unauthenticated users. This supports the primary
- *   use case of looking up shipment information without requiring a login.
- * - Authenticated Client-Side Writes: To allow users of the app to upload CSV data,
+ * - Public Read Access: All documents within the `shipments` and `inbounds` collections
+ *   are publicly readable by anyone, including unauthenticated users.
+ * - Authenticated Client-Side Writes: To allow app users to upload CSV data,
  *   write operations (`create`, `update`, `delete`) are permitted only for authenticated
- *   users. Given the app uses anonymous sign-in, any user actively using the app
- *   will be authenticated.
- * - Denormalization for Authorization: This principle is not applicable here as
- *   there are no user-specific authorization checks. The security model is uniform
- *   across the entire collection.
- * - Structural Segregation: The path itself (`.../public/data/...`) clearly
- *   segregates this public data from any potential future private data collections,
- *   making the security posture clear and easy to audit.
+ *   users. The app uses anonymous sign-in, so any active user is authenticated.
+ * - Structural Segregation: The path structure (`.../public/data/shipments` and
+ *   `.../public/data/inbounds`) clearly segregates data, making the security
+ *   posture clear and easy to audit.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Rules for outbound shipments
     match /artifacts/{appId}/public/data/shipments/{shipmentId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    // Rules for inbound shipments
+    match /artifacts/{appId}/public/data/inbounds/{inboundId} {
       allow read: if true;
       allow write: if request.auth != null;
     }

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -15,29 +16,37 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { clearShipmentData } from '@/ai/flows/clear-data';
+import { clearInboundData } from '@/ai/flows/clear-inbound-data';
 
-export function ClearDataButton() {
+interface ClearDataButtonProps {
+  dataType: 'inbound' | 'outbound';
+}
+
+export function ClearDataButton({ dataType }: ClearDataButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const handleClearData = async () => {
     setIsLoading(true);
     try {
-      const result = await clearShipmentData();
+      const result = dataType === 'outbound'
+        ? await clearShipmentData()
+        : await clearInboundData();
+
       if (result.success) {
         toast({
           title: 'Data Cleared',
-          description: `${result.recordsDeleted} records successfully deleted.`, 
+          description: `${result.recordsDeleted} ${dataType} records successfully deleted.`, 
         });
       } else {
         toast({
           title: 'Error',
-          description: `Failed to clear data: ${result.message}`, 
+          description: `Failed to clear ${dataType} data: ${result.message}`, 
           variant: 'destructive',
         });
       }
     } catch (error: any) {
-      console.error('Error clearing data:', error);
+      console.error(`Error clearing ${dataType} data:`, error);
       toast({
         title: 'Error',
         description: `An unexpected error occurred: ${error.message || 'Please try again.'}`, 
@@ -52,15 +61,15 @@ export function ClearDataButton() {
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="destructive" disabled={isLoading}>
-          {isLoading ? 'Clearing...' : 'Clear All Data'}
+          {isLoading ? `Clearing ${dataType}...` : `Clear All ${dataType.charAt(0).toUpperCase() + dataType.slice(1)} Data`}
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete all shipment records 
-            and remove your data from our servers.
+            This action cannot be undone. This will permanently delete all {dataType} records 
+            and remove the data from our servers.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

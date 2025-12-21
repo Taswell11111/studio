@@ -1,14 +1,20 @@
-{ pkgs }:
+{ pkgs, ... }: {
 
-pkgs.mkShell {
-  packages = with pkgs; [
-    nodejs_20
-    nil
-    tailwindcss-language-server
+  # Which nixpkgs channel to use.
+  channel = "stable-23.11"; # or "unstable"
+
+  # Use https://search.nixos.org/packages to find packages
+  packages = [
+    pkgs.nodejs_20
+    pkgs.nil
+    pkgs.tailwindcss-language-server
   ];
 
+  # Sets environment variables in the workspace for local development.
+  # IMPORTANT: These secrets are visible in this file and your repository.
+  # For better security, consider loading them from a .env file that is
+  # not checked into git.
   env = {
-    PORT = "9003";
     NODE_ENV = "development";
     DIESEL_API_USERNAME = "ENgsxyMbeqVGvGzTCpVdkZmsjz/VCDeF+NWHlRk3Hk0=";
     DIESEL_API_PASSWORD = "EuoTNvCvp5imhOR2TZDe/fnKDxfoPK+EORSqfGvafZk=";
@@ -22,5 +28,32 @@ pkgs.mkShell {
     SUPERDRY_API_USERNAME = "zcUrzwFh2QwtH1yEJixFXtUA4XGQyx2wbNVLpYTzZ8M=";
     SUPERDRY_API_PASSWORD = "92Av8tHsbq2XLEZZeRwYNsPFSkca+dD1cwRQs79rooM=";
     SUPERDRY_STORE_ID = "b112948b-0390-4833-8f41-47f997c5382c";
+  };
+
+  # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
+  idx.extensions = [
+    # Example: "dbaeumer.vscode-eslint"
+  ];
+
+  # Enable previews and customize configuration
+  idx.previews = {
+    enable = true;
+    previews = {
+      web = {
+        # The command to start your Next.js dev server.
+        # This will be run in the terminal when you open the preview.
+        command = [
+          "npm"
+          "run"
+          "dev"
+          "--"
+          "--port"
+          "$PORT"
+          "--hostname"
+          "0.0.0.0"
+        ];
+        manager = "web";
+      };
+    };
   };
 }
