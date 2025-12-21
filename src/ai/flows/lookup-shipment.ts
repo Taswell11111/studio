@@ -4,25 +4,17 @@
  * @fileOverview A Genkit flow to look up shipment details from an external warehouse API using an order ID.
  *
  * - lookupShipment - A function that fetches shipment data based on a source store order ID.
- * - LookupShipmentInput - The input type for the lookupShipment function.
- * - LookupShipmentOutput - The return type for the lookupShipment function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-import type { Shipment } from '@/types';
+import {
+  type Shipment,
+  LookupShipmentInputSchema,
+  type LookupShipmentInput,
+  LookupShipmentOutputSchema,
+  type LookupShipmentOutput,
+} from '@/types';
 
-const LookupShipmentInputSchema = z.object({
-  sourceStoreOrderId: z.string().describe('The Order ID from the source store.'),
-});
-export type LookupShipmentInput = z.infer<typeof LookupShipmentInputSchema>;
-
-// The output will be a single shipment record or null if not found
-const LookupShipmentOutputSchema = z.object({
-  shipment: z.custom<Shipment>().nullable(),
-  error: z.string().optional(),
-});
-export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
@@ -90,6 +82,8 @@ const lookupShipmentFlow = ai.defineFlow(
         'Status': data.status,
         'Tracking Link': data.trackingLink,
         'Item Name': data.itemName,
+        'Direction': 'Outbound', // Assuming lookup is always for outbound
+        'Shipment ID': data.id,
       };
 
       return {

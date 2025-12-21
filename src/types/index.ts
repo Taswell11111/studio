@@ -90,3 +90,16 @@ export const ClearInboundDataOutputSchema = z.object({
     message: z.string(),
 });
 export type ClearInboundDataOutput = z.infer<typeof ClearInboundDataOutputSchema>;
+
+
+// Schema for shipment lookup flow
+export const LookupShipmentInputSchema = z.object({
+  sourceStoreOrderId: z.string().describe('The Order ID from the source store.'),
+});
+export type LookupShipmentInput = z.infer<typeof LookupShipmentInputSchema>;
+
+export const LookupShipmentOutputSchema = z.object({
+  shipment: z.custom<Shipment>().nullable(),
+  error: z.string().optional(),
+});
+export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
