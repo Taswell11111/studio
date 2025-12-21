@@ -1,4 +1,4 @@
-'use server';
+
 import { z } from 'zod';
 
 // A single item within a shipment
