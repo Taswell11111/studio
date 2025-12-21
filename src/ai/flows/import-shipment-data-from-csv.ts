@@ -1,9 +1,10 @@
+
 'use server';
 
 /**
  * @fileOverview A Genkit flow to import shipment data from a single, unified CSV file.
- * It reads a 'Direction' column to determine if a row is an 'Inbound' or 'Outbound' record
- * and saves it to the appropriate Firestore collection.
+ * It reads a 'Direction' column to determine if a row is an 'Inbound' or 'Outbound' record,
+ * aggregates items by shipment ID, and saves the data to the appropriate Firestore collection.
  */
 
 import { ai } from '@/ai/genkit';
@@ -44,8 +45,8 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         };
       }
 
-      // Helper to find a header in a case-insensitive way
-      const findHeader = (headers: string[], possibleNames: string[]) => {
+      // Helper to find a header in a case-insensitive way and return its original casing
+      const findHeader = (headers: string[], possibleNames: string[]): string | null => {
         const lowerCaseNames = possibleNames.map(n => n.toLowerCase());
         for (const header of headers) {
           if (lowerCaseNames.includes(header.toLowerCase())) {
@@ -59,6 +60,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
       const directionHeader = findHeader(headers, ['Direction']);
       const shipmentIdHeader = findHeader(headers, ['Shipment ID', 'Shipmentf ID']);
 
+      // Validate required headers
       const missingHeaders = [];
       if (!directionHeader) missingHeaders.push('Direction');
       if (!shipmentIdHeader) missingHeaders.push('Shipment ID');
@@ -72,25 +74,25 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         };
       }
       
+      // Aggregate records by Shipment ID
       const shipmentsMap = new Map<string, (Shipment | Inbound) & { items: ShipmentItem[] }>();
 
       for (const record of records) {
         const shipmentId = record[shipmentIdHeader!];
         if (!shipmentId) {
-          console.warn("Skipping record with no 'Shipment ID':", record);
+          console.warn("Skipping record with empty 'Shipment ID':", record);
           continue;
         }
 
         // Create a new entry if we haven't seen this shipment ID before
         if (!shipmentsMap.has(shipmentId)) {
           shipmentsMap.set(shipmentId, {
-            id: shipmentId,
-            ...record,
-            items: [],
+            id: shipmentId, // Use shipmentId as the document ID
+            ...record, // Spread the rest of the record
+            items: [], // Initialize items array
           } as (Shipment | Inbound) & { items: ShipmentItem[] });
         }
 
-        // Get the aggregated shipment/inbound record
         const shipment = shipmentsMap.get(shipmentId)!;
         
         // Add the current row's item details to the items array
@@ -116,17 +118,18 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         const batchData = uniqueRecords.slice(i, i + BATCH_SIZE);
 
         for (const record of batchData) {
+          // Normalize direction value
           const direction = String(record[directionHeader!] || '').trim().toLowerCase();
           
           if (direction !== 'outbound' && direction !== 'inbound') {
-              console.warn(`Skipping record with invalid 'Direction': ${record[directionHeader!]}`, record);
+              console.warn(`Skipping record with invalid 'Direction': '${record[directionHeader!]}'`, record);
               continue; // Skip records with no or invalid direction
           }
 
           const collectionRef = direction === 'outbound' ? shipmentsColRef : inboundsColRef;
           const docRef = collectionRef.doc(record.id);
           
-          // Create a clean object to write, removing any undefined properties
+          // Create a clean object to write to prevent Firestore issues with undefined values
           const dataToWrite = JSON.parse(JSON.stringify(record));
           batch.set(docRef, dataToWrite, { merge: true });
 
