@@ -1,45 +1,43 @@
+'use server';
 
-
+// A single item within a shipment
 export type ShipmentItem = {
-  'Item Name': string;
-  [key: string]: any;
-};
-
-export type Shipment = {
-  id: string;
-  'Source Store Order ID': string;
-  'Status': string;
-  'Customer Name': string;
-  'Order Date': string;
-  'Courier': string;
-  'Tracking No': string;
-  'Tracking Link': string;
-  items: ShipmentItem[];
-  [key: string]: any;
-};
-
-export type InboundItem = {
   'Item Name': string;
   'Quantity': number;
   [key: string]: any;
 };
 
-export type Inbound = {
-  id: string; // Will use 'Return ID' from data as the document ID
-  'Return ID': string;
-  'Source Store order Id'?: string;
-  'Source Shipment ID'?: string;
-  'Reference'?: string;
-  'Return Date'?: string;
+// Represents a record from the unified CSV file.
+// Can be either an outbound shipment or an inbound return.
+export type ShipmentRecord = {
+  id: string; // Document ID, from 'Shipment ID'
+  'Direction': 'Outbound' | 'Inbound' | string;
+  'Shipment ID': string;
+  'Order ID'?: string;
+  'Source Store'?: string;
+  'Brand'?: string;
+  'Source Store Order ID'?: string;
+  'Order Date'?: string;
   'Shipping Type'?: string;
   'Tracking No'?: string;
   'Courier'?: string;
   'Status'?: string;
   'Status Date'?: string;
-  'Fulfilment Center'?: string;
+  'Customer Type'?: string;
   'Customer Name'?: string;
   'Address Line 1'?: string;
+  'Address Line 2'?: string;
+  'City'?: string;
+  'Region'?: string;
+  'State'?: string;
+  'Country'?: string;
   'Pin Code'?: string;
-  items: InboundItem[];
+  items: ShipmentItem[];
   [key: string]: any;
 };
+
+// Type alias for clarity in the code. Represents an outbound shipment.
+export type Shipment = ShipmentRecord;
+
+// Type alias for clarity. Represents an inbound shipment/return.
+export type Inbound = ShipmentRecord;

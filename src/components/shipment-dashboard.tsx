@@ -111,10 +111,8 @@ export default function ShipmentDashboard() {
           const result = await importShipmentDataFromCsv({ csvText });
 
           if (result.success) {
-            const recordsImported = 'recordsImported' in result ? result.recordsImported : 0;
-            const shipmentsCreated = 'shipmentsCreated' in result ? result.shipmentsCreated : 0;
-            const total = shipmentsCreated || recordsImported;
-            handleImportComplete(total, `CSV File (${result.dataType})`);
+            handleImportComplete(result.outboundsCreated + result.inboundsCreated, 'CSV File');
+            setLastImportSummary(result.message);
           } else {
             throw new Error(result.message);
           }
@@ -148,8 +146,13 @@ export default function ShipmentDashboard() {
   const handleImportComplete = (count: number, source: string) => {
     setIsProcessing(false);
     const timestamp = new Date().toLocaleString();
-    const message = `${count} records were successfully imported from ${source} on ${timestamp}.`;
-    setLastImportSummary(message);
+    const message = `${count} total records were successfully imported from ${source} on ${timestamp}.`;
+    
+    // Use lastImportSummary from the flow if it exists, otherwise use the generic one.
+    if (!lastImportSummary) {
+      setLastImportSummary(message);
+    }
+    
     setSuccessMessage(message);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 4000);
@@ -187,7 +190,7 @@ export default function ShipmentDashboard() {
       return (
         <>
           {foundShipments.map(shipment => <ShipmentCard key={shipment.id} item={shipment} />)}
-          {foundInbounds.map(inbound => <InboundCard key={inbound.id} item={inbound} />)}
+          {foundInbounds.map(inbound => <InboundCard key={inbound.id} item={inbound as any} />)}
         </>
       );
     }
@@ -220,7 +223,7 @@ export default function ShipmentDashboard() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
                   <p className="text-xs text-muted-foreground font-medium">
-                    {isLoading ? 'Connecting...' : `Tracking ${totalItems} Shipment Items`}
+                    {isLoading ? 'Connecting...' : `Tracking ${totalItems} Total Records`}
                   </p>
                 </div>
               </div>
@@ -251,7 +254,7 @@ export default function ShipmentDashboard() {
           <CardHeader>
             <CardTitle className="text-base">Admin: Import Shipment Data</CardTitle>
             <CardDescription>
-              Upload a CSV file containing either inbound or outbound shipment data. The system will auto-detect the type. This will overwrite existing records.
+              Upload a single CSV file containing inbound and/or outbound shipment data. The system will auto-detect the type based on the 'Direction' column.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
