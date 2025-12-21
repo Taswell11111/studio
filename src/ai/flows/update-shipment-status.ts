@@ -4,27 +4,16 @@
  * @fileOverview A Genkit flow to update a shipment's status from an external warehouse API.
  *
  * - updateShipmentStatus - A function that fetches the latest status and updates Firestore.
- * - UpdateShipmentStatusInput - The input type for the updateShipmentStatus function.
- * - UpdateShipmentStatusOutput - The return type for the updateShipmentStatus function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
-
-const UpdateShipmentStatusInputSchema = z.object({
-  shipmentId: z.string().describe('The document ID of the shipment in Firestore.'),
-  trackingNo: z.string().describe('The tracking number of the shipment.'),
-  courier: z.string().describe('The courier/store name to determine which API credentials to use.'),
-});
-export type UpdateShipmentStatusInput = z.infer<typeof UpdateShipmentStatusInputSchema>;
-
-const UpdateShipmentStatusOutputSchema = z.object({
-  success: z.boolean(),
-  newStatus: z.string().optional(),
-  message: z.string(),
-});
-export type UpdateShipmentStatusOutput = z.infer<typeof UpdateShipmentStatusOutputSchema>;
+import {
+  UpdateShipmentStatusInputSchema,
+  UpdateShipmentStatusOutputSchema,
+  type UpdateShipmentStatusInput,
+  type UpdateShipmentStatusOutput,
+} from '@/types';
 
 // Main exported function that the client will call
 export async function updateShipmentStatus(input: UpdateShipmentStatusInput): Promise<UpdateShipmentStatusOutput> {

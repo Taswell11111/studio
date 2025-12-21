@@ -1,18 +1,11 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
+import { ClearInboundDataOutputSchema, type ClearInboundDataOutput } from '@/types';
 
 const BATCH_SIZE = 100;
-
-const ClearInboundDataOutputSchema = z.object({
-  success: z.boolean(),
-  recordsDeleted: z.number(),
-  message: z.string(),
-});
-export type ClearInboundDataOutput = z.infer<typeof ClearInboundDataOutputSchema>;
 
 export async function clearInboundData(): Promise<ClearInboundDataOutput> {
   return clearInboundDataFlow({});

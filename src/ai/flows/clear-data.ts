@@ -3,15 +3,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
+import { ClearDataOutputSchema, type ClearDataOutput } from '@/types';
 
 const BATCH_SIZE = 100;
-
-const ClearDataOutputSchema = z.object({
-  success: z.boolean(),
-  recordsDeleted: z.number(),
-  message: z.string(),
-});
-export type ClearDataOutput = z.infer<typeof ClearDataOutputSchema>;
 
 export async function clearShipmentData(): Promise<ClearDataOutput> {
   return clearShipmentDataFlow({});

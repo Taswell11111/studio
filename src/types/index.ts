@@ -58,3 +58,35 @@ export const ImportShipmentDataOutputSchema = z.object({
   message: z.string(),
 });
 export type ImportShipmentDataOutput = z.infer<typeof ImportShipmentDataOutputSchema>;
+
+
+// Schema for update shipment status flow
+export const UpdateShipmentStatusInputSchema = z.object({
+  shipmentId: z.string().describe('The document ID of the shipment in Firestore.'),
+  trackingNo: z.string().describe('The tracking number of the shipment.'),
+  courier: z.string().describe('The courier/store name to determine which API credentials to use.'),
+});
+export type UpdateShipmentStatusInput = z.infer<typeof UpdateShipmentStatusInputSchema>;
+
+export const UpdateShipmentStatusOutputSchema = z.object({
+  success: z.boolean(),
+  newStatus: z.string().optional(),
+  message: z.string(),
+});
+export type UpdateShipmentStatusOutput = z.infer<typeof UpdateShipmentStatusOutputSchema>;
+
+
+// Schema for clearing data flows
+export const ClearDataOutputSchema = z.object({
+  success: z.boolean(),
+  recordsDeleted: z.number(),
+  message: z.string(),
+});
+export type ClearDataOutput = z.infer<typeof ClearDataOutputSchema>;
+
+export const ClearInboundDataOutputSchema = z.object({
+    success: z.boolean(),
+    recordsDeleted: z.number(),
+    message: z.string(),
+});
+export type ClearInboundDataOutput = z.infer<typeof ClearInboundDataOutputSchema>;
