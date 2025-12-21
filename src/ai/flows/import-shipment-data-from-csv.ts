@@ -44,10 +44,24 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         };
       }
 
-      // Check for required headers
+      // Helper to find a header in a case-insensitive way
+      const findHeader = (headers: string[], possibleNames: string[]) => {
+        const lowerCaseNames = possibleNames.map(n => n.toLowerCase());
+        for (const header of headers) {
+          if (lowerCaseNames.includes(header.toLowerCase())) {
+            return header;
+          }
+        }
+        return null;
+      };
+      
       const headers = Object.keys(records[0] || {});
-      const requiredHeaders = ['Direction', 'Shipment ID'];
-      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+      const directionHeader = findHeader(headers, ['Direction']);
+      const shipmentIdHeader = findHeader(headers, ['Shipment ID', 'Shipmentf ID']);
+
+      const missingHeaders = [];
+      if (!directionHeader) missingHeaders.push('Direction');
+      if (!shipmentIdHeader) missingHeaders.push('Shipment ID');
 
       if (missingHeaders.length > 0) {
         return {
@@ -61,7 +75,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
       const shipmentsMap = new Map<string, (Shipment | Inbound) & { items: ShipmentItem[] }>();
 
       for (const record of records) {
-        const shipmentId = record['Shipment ID'];
+        const shipmentId = record[shipmentIdHeader!];
         if (!shipmentId) {
           console.warn("Skipping record with no 'Shipment ID':", record);
           continue;
@@ -102,23 +116,21 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         const batchData = uniqueRecords.slice(i, i + BATCH_SIZE);
 
         for (const record of batchData) {
-          // Normalize direction check
-          const isOutbound = String(record['Direction'] || '').trim().toLowerCase() === 'outbound';
-          const isİnbound = String(record['Direction'] || '').trim().toLowerCase() === 'inbound';
+          const direction = String(record[directionHeader!] || '').trim().toLowerCase();
           
-          if (!isOutbound && !isİnbound) {
-              console.warn(`Skipping record with invalid 'Direction': ${record['Direction']}`, record);
+          if (direction !== 'outbound' && direction !== 'inbound') {
+              console.warn(`Skipping record with invalid 'Direction': ${record[directionHeader!]}`, record);
               continue; // Skip records with no or invalid direction
           }
 
-          const collectionRef = isOutbound ? shipmentsColRef : inboundsColRef;
+          const collectionRef = direction === 'outbound' ? shipmentsColRef : inboundsColRef;
           const docRef = collectionRef.doc(record.id);
           
           // Create a clean object to write, removing any undefined properties
           const dataToWrite = JSON.parse(JSON.stringify(record));
           batch.set(docRef, dataToWrite, { merge: true });
 
-          if (isOutbound) {
+          if (direction === 'outbound') {
             outboundsCreated++;
           } else {
             inboundsCreated++;
