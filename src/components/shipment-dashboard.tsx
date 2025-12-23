@@ -8,7 +8,7 @@ import { collection } from 'firebase/firestore';
 // Unified import flow
 import { importShipmentDataFromCsv } from '@/ai/flows/import-shipment-data-from-csv';
 
-import { Search, Upload, AlertCircle, CloudLightning, Share2, X } from 'lucide-react';
+import { Search, Upload, AlertCircle, CloudLightning, Share2, X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -265,6 +265,10 @@ export default function ShipmentDashboard() {
                 <input type="file" id="csv-upload" className="hidden" accept=".csv" onChange={handleFileUpload} disabled={isUploading} />
               </label>
             </Button>
+            <a href="/sample-import.csv" download="sample-import.csv" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 gap-2">
+                <Download className="w-4 h-4" />
+                Download Sample
+            </a>
             <div className="flex items-center gap-2">
               <ClearDataButton dataType="outbound" />
               <ClearDataButton dataType="inbound" />
