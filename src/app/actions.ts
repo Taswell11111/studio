@@ -4,7 +4,6 @@
 import { updateShipmentStatus } from "@/ai/flows/update-shipment-status";
 import { db } from "@/lib/db";
 import { Shipment } from "@/types";
-import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
 
 // Helper to get the date three days ago
 function getThreeDaysAgo() {
@@ -16,15 +15,12 @@ function getThreeDaysAgo() {
 export async function refreshAllShipmentsAction() {
   try {
     const threeDaysAgo = getThreeDaysAgo();
-    const shipmentsRef = collection(db, "shipments");
+    const shipmentsRef = db.collection("shipments");
     
     // Query for shipments updated in the last 3 days
-    const q = query(
-      shipmentsRef,
-      where("updatedAt", ">=", Timestamp.fromDate(threeDaysAgo))
-    );
+    const q = shipmentsRef.where("updatedAt", ">=", threeDaysAgo);
 
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await q.get();
     const shipmentsToRefresh = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment));
 
     let successCount = 0;
@@ -32,8 +28,10 @@ export async function refreshAllShipmentsAction() {
 
     for (const shipment of shipmentsToRefresh) {
       try {
-        await updateShipmentStatus.run({
+        await updateShipmentStatus({ // Correctly call the flow
           shipmentId: shipment.id,
+          trackingNo: shipment.trackingNo,
+          courier: shipment.courier,
         });
         successCount++;
       } catch (error) {
