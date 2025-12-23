@@ -97,6 +97,8 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     'Shipment ID',
     'Source Store Order ID',
     'Status Date',
+    'Item Name',
+    'Quantity',
     ...addressFields,
   ];
 
@@ -177,7 +179,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
               {item.items.map((shipmentItem: ShipmentItem, index: number) => (
                 <div key={index} className="p-4 rounded-lg border bg-secondary/30">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <DetailItem icon={ShoppingBag} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
+                      <DetailItem icon={ShoppingBag} label="Item Name" value={shipmentItem['Item Name'] || 'N/A'} />
                       <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
                   </div>
                 </div>

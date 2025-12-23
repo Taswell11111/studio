@@ -1,5 +1,5 @@
-"Direction","Shipment ID","Source Store Order ID","Order Date","Courier","Tracking No","Status","Customer Name","Item Name","Quantity","SKU","Address Line 1","City","State","Pin Code","Country"
-"Outbound","SHP-001","ORD-101","2024-05-20","The Courier Guy","TCG123456789","In Transit","John Doe","Diesel Jeans","1","DZ-KL-01","123 Main St","Johannesburg","Gauteng","2000","South Africa"
-"Outbound","SHP-001","ORD-101","2024-05-20","The Courier Guy","TCG123456789","In Transit","John Doe","Diesel T-Shirt","2","DZ-TS-05","123 Main St","Johannesburg","Gauteng","2000","South Africa"
-"Inbound","SHP-002","ORD-102","2024-05-21","RAM","RAM987654321","Delivered","Jane Smith","Hurley Shorts (Return)","1","HY-SH-11","456 Oak Ave","Cape Town","Western Cape","8001","South Africa"
-"Outbound","SHP-003","ORD-103","2024-05-22","Fastway","FW-555-444","Awaiting stock","Peter Jones","Superdry Hoodie","1","SD-HD-23","789 Pine Rd","Durban","KwaZulu-Natal","4001","South Africa"
+Direction,Shipment ID,Source Store,Source Store Order ID,Order Date,Courier,Status,Status Date,Customer Type,Customer Name,Address Line 1,Address Line 2,City,Region,State,Country,Pin Code,Item Name,Quantity
+Outbound,SH0001,Online Store,ORD-101,2023-10-26,Diesel,Delivered,2023-10-30,Retail,John Doe,123 Main St,,Metropolis,East,StateA,USA,12345,Diesel Jeans,1
+Outbound,SH0001,Online Store,ORD-101,2023-10-26,Diesel,Delivered,2023-10-30,Retail,John Doe,123 Main St,,Metropolis,East,StateA,USA,12345,Diesel T-Shirt,2
+Inbound,SH0002,Warehouse,ORD-102,2023-10-27,Hurley,In Transit,2023-10-29,Wholesale,Jane Smith,456 Oak Ave,,Gotham,West,StateB,USA,67890,Hurley Shorts,5
+Outbound,SH0003,Retail Outlet,ORD-103,2023-10-28,Jeep,Pending,2023-10-28,Retail,Peter Jones,789 Pine Ln,Apt 2,Star City,North,StateC,USA,10112,Jeep Cap,1

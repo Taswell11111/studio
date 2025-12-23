@@ -99,7 +99,6 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         const item: ShipmentItem = {
           'Item Name': record['Item Name'] || 'N/A',
           'Quantity': parseInt(record['Quantity'], 10) || 0,
-          'SKU': record['SKU'] || 'N/A',
         };
         shipment.items!.push(item);
       }

@@ -5,7 +5,6 @@ import { z } from 'zod';
 export type ShipmentItem = {
   'Item Name': string;
   'Quantity': number;
-  'SKU'?: string;
   [key: string]: any;
 };
 
@@ -15,13 +14,9 @@ export type ShipmentRecord = {
   id: string; // Document ID, from 'Shipment ID'
   'Direction': 'Outbound' | 'Inbound' | string;
   'Shipment ID': string;
-  'Order ID'?: string;
   'Source Store'?: string;
-  'Brand'?: string;
   'Source Store Order ID'?: string;
   'Order Date'?: string;
-  'Shipping Type'?: string;
-  'Tracking No'?: string;
   'Courier'?: string;
   'Status'?: string;
   'Status Date'?: string;
