@@ -1,83 +1,41 @@
-
 'use server';
 
-import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
-import { initializeFirebaseOnServer } from '@/firebase/server-init';
-import type { Shipment } from '@/types';
+import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 
 /**
- * Server action to refresh the status of all shipment records in Firestore.
- * It fetches all shipments, then iterates through them, calling the 
- * updateShipmentStatus flow for each one.
+ * Server action to trigger the synchronization of recent shipment records.
+ * It calls the sync flow for records updated in the last 3 days.
  */
 export async function refreshAllShipmentsAction() {
   try {
-    const { firestore } = initializeFirebaseOnServer();
-    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-    const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
-    
-    const querySnapshot = await shipmentsRef.get();
-    const shipmentsToRefresh = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Shipment));
+    // Call the new sync flow for the last 3 days
+    const result = await syncRecentShipments({ days: 3 });
 
-    let successCount = 0;
-    let failCount = 0;
-    const errors: string[] = [];
-
-    // Use Promise.allSettled to run updates in parallel for efficiency
-    const results = await Promise.allSettled(
-      shipmentsToRefresh.map(shipment => {
-        if (!shipment.id || !shipment['Tracking No'] || !shipment['Courier']) {
-          // Skip records with missing essential data
-          return Promise.resolve({ status: 'skipped', reason: `Skipped ${shipment.id || 'unknown'}: missing ID, Tracking No, or Courier.` });
-        }
-        return updateShipmentStatus({
-          shipmentId: shipment.id,
-          trackingNo: shipment['Tracking No'],
-          courier: shipment['Courier'],
-        });
-      })
-    );
-
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        // Check if the updateShipmentStatus flow itself was successful
-        const flowResult = result.value as { success: boolean; message?: string, status?: string, reason?: string };
-        if (flowResult.success) {
-          successCount++;
-        } else if (flowResult.status === 'skipped') {
-           console.warn(flowResult.reason);
-        }
-        else {
-          failCount++;
-          const shipmentId = shipmentsToRefresh[index]?.id || 'unknown';
-          errors.push(`Failed ${shipmentId}: ${flowResult.message || 'Unknown flow error'}`);
-        }
-      } else {
-        // The promise was rejected (unexpected error in the flow)
-        failCount++;
-        const shipmentId = shipmentsToRefresh[index]?.id || 'unknown';
-        errors.push(`Failed ${shipmentId}: ${result.reason?.message || 'An unexpected error occurred'}`);
-      }
-    });
-
-    if (failCount > 0) {
-      console.error('Some shipments failed to update:', errors);
+    if (!result.success && result.errors.length > 0) {
+      console.error('Sync process had errors:', result.errors);
+      // Return a structured error message summarizing the failures
+      return { 
+        success: false, 
+        successCount: result.recordsUpdated, 
+        failCount: result.errors.length,
+        error: `Sync partially failed. ${result.errors.join('; ')}`
+      };
     }
     
     return { 
-      success: failCount === 0, 
-      successCount, 
-      failCount,
-      error: failCount > 0 ? `Failed to update ${failCount} shipments. See server logs for details.` : undefined
+      success: true, 
+      successCount: result.recordsUpdated + result.recordsCreated, 
+      failCount: 0,
+      message: result.message,
     };
 
   } catch (error) {
-    console.error("Error in refreshAllShipmentsAction:", error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown server error occurred';
+    console.error("Critical error in refreshAllShipmentsAction:", error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown server error occurred during sync.';
     return { 
         success: false, 
         successCount: 0,
-        failCount: 0,
+        failCount: 1, // Represents the entire action failing
         error: errorMessage 
     };
   }
