@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useTransition } from 'react';
@@ -23,16 +22,17 @@ export function RefreshAllButton() {
       if (result.success) {
         toast({
           title: 'Refresh Complete',
-          description: `${result.successCount} shipments updated successfully, ${result.failCount} failed.`,
+          description: `${result.successCount} shipments updated successfully.`,
         });
-        window.location.reload();
       } else {
-        toast({
+         toast({
           variant: 'destructive',
-          title: 'Refresh Failed',
-          description: result.error,
+          title: 'Refresh Partially Failed',
+          description: `${result.successCount} succeeded, ${result.failCount} failed. ${result.error || ''}`,
         });
       }
+      // Trigger a page reload to show updated statuses
+      window.location.reload();
     });
   };
 
