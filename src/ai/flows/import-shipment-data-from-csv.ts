@@ -56,9 +56,11 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
         return null;
       };
       
-      const headers = Object.keys(records[0] || {});
+      const headers = records[0] ? Object.keys(records[0]) : [];
+      console.log("Parsed CSV Headers:", headers); // Diagnostic log
+
       const directionHeader = findHeader(headers, ['Direction']);
-      const shipmentIdHeader = findHeader(headers, ['Shipment ID', 'Shipmentf ID']);
+      const shipmentIdHeader = findHeader(headers, ['Shipment ID']);
 
       // Validate required headers
       const missingHeaders = [];
@@ -70,7 +72,7 @@ const importShipmentDataFromCsvFlow = ai.defineFlow(
           success: false,
           inboundsCreated: 0,
           outboundsCreated: 0,
-          message: `CSV is missing required columns: ${missingHeaders.join(', ')}.`,
+          message: `CSV is missing required columns: ${missingHeaders.join(', ')}. Found headers: ${headers.join(', ')}`,
         };
       }
       
