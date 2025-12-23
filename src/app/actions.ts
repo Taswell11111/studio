@@ -1,3 +1,4 @@
+
 'use server';
 
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
@@ -40,7 +41,7 @@ export async function refreshAllShipmentsAction() {
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         // Check if the updateShipmentStatus flow itself was successful
-        const flowResult = result.value as { success: boolean; message?: string, status?: string };
+        const flowResult = result.value as { success: boolean; message?: string, status?: string, reason?: string };
         if (flowResult.success) {
           successCount++;
         } else if (flowResult.status === 'skipped') {
