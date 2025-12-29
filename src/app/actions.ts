@@ -1,6 +1,7 @@
 'use server';
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
+import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
@@ -38,5 +39,21 @@ export async function refreshAllShipmentsAction() {
         failCount: 1, // Represents the entire action failing
         error: errorMessage 
     };
+  }
+}
+
+/**
+ * Server action to test the connection to the Parcelninja API for all configured stores.
+ */
+export async function testConnectionsAction() {
+  try {
+    const result = await testParcelninjaConnection();
+    return result;
+  } catch (error: any) {
+    console.error("Critical error in testConnectionsAction:", error);
+    return {
+      results: [],
+      error: error.message || 'An unknown server error occurred during connection test.',
+    }
   }
 }

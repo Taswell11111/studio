@@ -3,8 +3,9 @@
 import React, { useState, useTransition } from 'react';
 import type { Shipment, Inbound } from '@/types';
 import { lookupShipment } from '@/ai/flows/lookup-shipment';
+import { testConnectionsAction } from '@/app/actions';
 
-import { Search, CloudLightning, Share2, AlertCircle } from 'lucide-react';
+import { Search, CloudLightning, Share2, AlertCircle, Wifi } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -12,11 +13,17 @@ import { ShipmentCard } from '@/components/shipment-card';
 import { ProcessingModal } from '@/components/processing-modal';
 import { useToast } from '@/hooks/use-toast';
 import { RefreshAllButton } from './refresh-all-button';
+import { InboundCard } from './inbound-card';
+import { uploadCsv, clearAllShipments, clearAllInbounds } from '@/app/client-actions';
 
 export default function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResult, setSearchResult] = useState<Shipment | null>(null);
+  const [searchResult, setSearchResult] = useState<Shipment | Inbound | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingTitle, setProcessingTitle] = useState('');
+  const [isTesting, startTestTransition] = useTransition();
+
   const { toast } = useToast();
 
   const handleSearch = (e?: React.FormEvent) => {
@@ -52,6 +59,41 @@ export default function ShipmentDashboard() {
     });
   };
 
+  const handleTestConnections = () => {
+    startTestTransition(async () => {
+      toast({ title: 'Testing Connections...', description: 'Pinging all configured warehouse APIs.' });
+      const { results, error } = await testConnectionsAction();
+      
+      if (error) {
+        toast({ variant: 'destructive', title: 'Test Failed', description: error });
+        return;
+      }
+      
+      let successCount = 0;
+      results.forEach(result => {
+        if (result.success) {
+          successCount++;
+          toast({
+            variant: 'default',
+            title: `✅ ${result.storeName}: Connected`,
+            description: 'Successfully authenticated with the API.',
+          });
+        } else {
+          toast({
+            variant: 'destructive',
+            title: `❌ ${result.storeName}: Connection Failed`,
+            description: result.error || 'An unknown error occurred.',
+          });
+        }
+      });
+
+      if(successCount === results.length) {
+         toast({ title: 'All Connections Successful', description: 'All warehouse APIs are responding correctly.' });
+      }
+
+    });
+  }
+
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -67,10 +109,18 @@ export default function ShipmentDashboard() {
       });
     }
   };
+  
+  const DisplayCard = () => {
+      if (!searchResult) return null;
+      if (searchResult.Direction === 'Inbound') {
+          return <InboundCard item={searchResult as Inbound} />;
+      }
+      return <ShipmentCard item={searchResult as Shipment} />;
+  }
 
   return (
     <>
-      <ProcessingModal isOpen={isSearching} title="Searching Warehouse..." />
+      <ProcessingModal isOpen={isSearching || isProcessing} title={isSearching ? "Searching Warehouse..." : processingTitle} />
       
       <div className="max-w-7xl mx-auto space-y-6">
         <Card className="p-4 sm:p-6">
@@ -87,6 +137,10 @@ export default function ShipmentDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
+              <Button onClick={handleTestConnections} disabled={isTesting} variant="outline" size="sm">
+                  <Wifi className={`mr-2 h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
+                  {isTesting ? 'Testing...' : 'Test Connections'}
+              </Button>
               <RefreshAllButton />
               <Button variant="outline" onClick={handleShare}><Share2 className="mr-2 h-4 w-4"/><span>Share Tool</span></Button>
             </div>
@@ -113,11 +167,11 @@ export default function ShipmentDashboard() {
         
         <div className="grid grid-cols-1 gap-4">
           {searchResult ? (
-            <ShipmentCard item={searchResult} />
+            <DisplayCard />
           ) : (
              !isSearching && searchTerm && (
                 <div className="text-center py-12 text-muted-foreground">
-                    <p>No results to display.</p>
+                    <p>No results to display for that Order ID.</p>
                 </div>
              )
           )}
