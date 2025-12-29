@@ -76,7 +76,6 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - days);
     
-    // Correctly format dates as YYYYMMDD
     const toDateStr = format(dateTo, 'yyyyMMdd');
     const fromDateStr = format(dateFrom, 'yyyyMMdd');
 
@@ -84,12 +83,10 @@ const syncRecentShipmentsFlow = ai.defineFlow(
         if (!creds.apiUsername || !creds.apiPassword) {
             const errorMsg = `Skipping sync for ${creds.name}: Missing credentials.`;
             console.warn(errorMsg);
-            // Don't push this to errors unless we want to surface it to the user
             continue;
         }
 
         try {
-            // Process both outbounds and inbounds for the current store
             const [outboundStats, inboundStats] = await Promise.all([
                 processEndpoint(creds, 'outbounds', shipmentsColRef, fromDateStr, toDateStr),
                 processEndpoint(creds, 'inbounds', inboundsColRef, fromDateStr, toDateStr)
@@ -188,15 +185,9 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
             const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
 
             if (docSnap.exists) {
-                // Only update if status is different
-                const existingData = docSnap.data();
-                if (existingData?.Status !== mappedRecord.Status) {
-                    await docRef.update({ 
-                        'Status': mappedRecord.Status,
-                        'Status Date': mappedRecord['Status Date'],
-                    });
-                    updated++;
-                }
+                // Always update the record to ensure all fields are fresh
+                await docRef.set(mappedRecord, { merge: true });
+                updated++;
             } else {
                 await docRef.set(mappedRecord);
                 created++;
