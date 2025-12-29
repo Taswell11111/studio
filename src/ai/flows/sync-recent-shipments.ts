@@ -5,6 +5,8 @@
  * It fetches records updated in the last X days, compares them with Firestore,
  * and either updates existing records or creates new ones.
  */
+import { config } from 'dotenv';
+config();
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';

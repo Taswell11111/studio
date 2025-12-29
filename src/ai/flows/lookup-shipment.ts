@@ -5,6 +5,8 @@
  *
  * - lookupShipment - A function that fetches shipment data based on a source store order ID (X-Client-Id) and saves it to Firestore.
  */
+import { config } from 'dotenv';
+config();
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';

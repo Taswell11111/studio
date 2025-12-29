@@ -1,6 +1,6 @@
 'use server';
 import { config } from 'dotenv';
-config({ path: '.env.local' });
+config();
 
 import '@/ai/flows/update-shipment-status.ts';
 import '@/ai/flows/clear-data.ts';

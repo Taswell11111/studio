@@ -2,6 +2,8 @@
 /**
  * @fileOverview A Genkit flow to test the API connection to Parcelninja for all configured stores.
  */
+import { config } from 'dotenv';
+config();
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';

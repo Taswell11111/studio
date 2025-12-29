@@ -5,6 +5,8 @@
  *
  * - updateShipmentStatus - A function that fetches the latest status and updates Firestore.
  */
+import { config } from 'dotenv';
+config();
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
