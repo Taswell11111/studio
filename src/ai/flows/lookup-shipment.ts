@@ -55,10 +55,10 @@ const lookupShipmentFlow = ai.defineFlow(
     
     let foundRecord: Shipment | Inbound | null = null;
     
-    // Date range for general search queries
+    // Date range for general search queries - search last 90 days for broad queries.
     const today = new Date();
     const fromDate = new Date();
-    fromDate.setDate(today.getDate() - 90); // Search last 90 days for broad queries
+    fromDate.setDate(today.getDate() - 90);
     const startDate = format(fromDate, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
 
@@ -70,20 +70,17 @@ const lookupShipmentFlow = ai.defineFlow(
       }
 
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
-      
-      // Define all possible endpoints to check for each store
-      const endpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit, isSearch: boolean }[] = [
-        // 1. Exact ID match (most efficient)
-        { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm }, isSearch: false },
-        { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm }, isSearch: false },
-        // 2. General search (fallback)
-        { type: 'Outbound', url: `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` }, isSearch: true },
-        { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` }, isSearch: true }
+      const headers = { 'Authorization': `Basic ${basicAuth}` };
+
+      // Define endpoints for general search on both outbounds and inbounds.
+      const endpoints: { type: 'Outbound' | 'Inbound', url: string }[] = [
+        { type: 'Outbound', url: `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}` },
+        { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}` }
       ];
 
       for (const endpoint of endpoints) {
         if (foundRecord) break;
-        const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, endpoint.isSearch);
+        const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, headers);
         if(result) {
             foundRecord = result;
             break;
@@ -91,17 +88,10 @@ const lookupShipmentFlow = ai.defineFlow(
       }
     }
 
-    // 3. If still not found, do a deep search by Channel ID
-    if (!foundRecord) {
-        console.log(`[API] Primary search failed. Starting deep search for Channel ID "${searchTerm}"...`);
-        foundRecord = await searchAllOutboundsByField('channelId', searchTerm);
-    }
-
     if (foundRecord) {
       try {
         const collectionName = foundRecord.Direction === 'Inbound' ? 'inbounds' : 'shipments';
         const docId = String(foundRecord['Shipment ID']);
-        // Correctly save to the namespaced collection path
         const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
         
         const dataToSave = { ...foundRecord, updatedAt: new Date().toISOString() };
@@ -122,22 +112,16 @@ const lookupShipmentFlow = ai.defineFlow(
 );
 
 
-async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound', url: string, headers: HeadersInit, isSearch: boolean): Promise<Shipment | Inbound | null> {
+async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound', url: string, headers: HeadersInit): Promise<Shipment | Inbound | null> {
     try {
         console.log(`[${storeName}] Checking ${direction} at ${url}`);
         const response = await fetch(url, { method: 'GET', headers });
 
         if (response.ok) {
             const data = await response.json();
-
-            // For exact ID match calls
-            if (!isSearch && data && data.id) {
-                console.log(`[${storeName}] Found ${direction} record by ID.`);
-                return mapParcelninjaToShipment(data, direction, storeName);
-            }
-            // For general search calls
             const recordListKey = direction.toLowerCase() + 's';
-            if (isSearch && data && data[recordListKey] && data[recordListKey].length > 0) {
+            
+            if (data && data[recordListKey] && data[recordListKey].length > 0) {
                  console.log(`[${storeName}] Found ${direction} record by general search.`);
                 const record = data[recordListKey][0];
                 const detailUrl = `https://storeapi.parcelninja.com/api/v1/${recordListKey}/${record.id}`;
@@ -149,59 +133,12 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
             }
         } else if (response.status !== 404) {
             const errorText = await response.text();
-            // Don't log 404s as errors, they are expected when a record isn't in a specific store
-            if (response.status !== 404) {
-              console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
-            }
+            console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
         }
     } catch (err: any) {
         console.error(`[${storeName}] Network error checking ${direction}:`, err.message);
     }
     return null;
-}
-
-/**
- * Performs a deep search by fetching all outbounds in a date range and matching a field.
- * This is a fallback for fields that are not directly searchable via the API.
- */
-async function searchAllOutboundsByField(field: 'channelId', value: string): Promise<Shipment | null> {
-    const today = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(today.getDate() - 90); // Search last 90 days
-    const startDate = format(fromDate, 'yyyyMMdd');
-    const endDate = format(today, 'yyyyMMdd');
-
-    for (const creds of credentialsList) {
-        if (!creds.apiUsername || !creds.apiPassword) continue;
-
-        const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
-        const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1000`;
-
-        try {
-            console.log(`[${creds.name}] Deep searching outbounds for ${field} = ${value}`);
-            const response = await fetch(url, { headers: { 'Authorization': `Basic ${basicAuth}` } });
-            if (!response.ok) continue;
-
-            const data = await response.json();
-            if (!data.outbounds || data.outbounds.length === 0) continue;
-
-            // Find the matching record in the results
-            const foundApiRecord = data.outbounds.find((record: any) => record[field] === value);
-            
-            if (foundApiRecord) {
-                 console.log(`[${creds.name}] Found match by ${field} in deep search. Fetching full details for ID ${foundApiRecord.id}.`);
-                 const fullRecordResponse = await fetch(`https://storeapi.parcelninja.com/api/v1/outbounds/${foundApiRecord.id}`, { headers: { 'Authorization': `Basic ${basicAuth}` } });
-                 if(fullRecordResponse.ok){
-                    const fullRecord = await fullRecordResponse.json();
-                    return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name) as Shipment;
-                 }
-            }
-        } catch (err: any) {
-            console.error(`[${creds.name}] Error during deep search:`, err.message);
-        }
-    }
-
-    return null; // Return null if not found in any store
 }
 
 
