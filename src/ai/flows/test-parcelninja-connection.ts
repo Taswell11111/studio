@@ -5,6 +5,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { format } from 'date-fns';
 
 // --- SCHEMAS ---
 
@@ -16,7 +17,7 @@ const ConnectionTestResultSchema = z.object({
 type ConnectionTestResult = z.infer<typeof ConnectionTestResultSchema>;
 
 const TestConnectionOutputSchema = z.object({
-  results: z.array(ConnectionTestResultSchema),
+  results: z.array(ConnectionTestTestResultSchema),
 });
 export type TestConnectionOutput = z.infer<typeof TestConnectionOutputSchema>;
 
@@ -52,35 +53,30 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     ];
     
     const testResults: ConnectionTestResult[] = [];
+    
+    // Define a 1-day date range for the test query.
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
-    const formatDate = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}${month}${day}`;
-    };
-
-    const startDate = formatDate(yesterday);
-    const endDate = formatDate(today);
-
+    const startDate = format(yesterday, 'yyyyMMdd');
+    const endDate = format(today, 'yyyyMMdd');
 
     for (const creds of credentialsList) {
       console.log(`[Connection Test] Testing store: ${creds.name}`);
       if (!creds.apiUsername || !creds.apiPassword) {
-        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - Missing API Username or Password.`);
+        const errorMsg = 'Missing API Username or Password in environment variables.';
+        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`);
         testResults.push({
           storeName: creds.name,
           success: false,
-          error: 'Missing API Username or Password in environment variables.',
+          error: errorMsg,
         });
         continue;
       }
 
-      // A lightweight API call to list outbounds from the last day.
-      const url = `https://storeapi.parcelninja.com/api/v1/outbounds?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
+      // This is a lightweight, valid API call to list outbounds.
+      // It serves as a reliable way to test authentication and connectivity.
+      const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
       
       console.log(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`);
@@ -110,8 +106,9 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
           testResults.push({ storeName: creds.name, success: false, error: errorMessage });
         }
       } catch (err: any) {
-        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - Network or other error:`, err);
-        testResults.push({ storeName: creds.name, success: false, error: err.message || 'A network error occurred.' });
+        const networkError = err.message || 'A network error occurred.';
+        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - ${networkError}`);
+        testResults.push({ storeName: creds.name, success: false, error: networkError });
       }
     }
     
