@@ -1,7 +1,4 @@
 'use server';
-import { config } from 'dotenv';
-config();
-
 import '@/ai/flows/update-shipment-status.ts';
 import '@/ai/flows/clear-data.ts';
 import '@/ai/flows/clear-inbound-data.ts';
