@@ -197,12 +197,14 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
         console.log(`[${creds.name}/${direction}] Found ${records.length} records. Processing...`);
 
         const updates = records.map(async (record: any) => {
-            const docId = String(record.clientId || record.id);
+            const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
+            const docId = mappedRecord.id;
+
             if (!docId) return;
 
             const docRef = collectionRef.doc(docId);
             const docSnap = await docRef.get();
-            const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
+            
 
             if (docSnap.exists) {
                 await docRef.set(mappedRecord, { merge: true });
