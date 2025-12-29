@@ -1,13 +1,14 @@
 
 import { initializeApp, getApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInWithCustomToken, Auth } from 'firebase/auth';
 import { sign } from 'jsonwebtoken';
 
 const APP_NAME = 'SHIPMENT_LOOK_ADMIN_APP';
 
 // Store a cached instance of the initialized app.
 let serverApp: FirebaseApp | null = null;
+let serverAuth: Auth | null = null;
 let serverFirestore: Firestore | null = null;
 
 /**
@@ -16,7 +17,7 @@ let serverFirestore: Firestore | null = null;
  * It creates a custom JWT token to authenticate as a "server user".
  */
 async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firestore: Firestore }> {
-  if (serverApp && serverFirestore) {
+  if (serverApp && serverFirestore && serverAuth?.currentUser) {
     return { firebaseApp: serverApp, firestore: serverFirestore };
   }
 
@@ -40,16 +41,15 @@ async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firest
     audience: 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
     expiresIn: '1h',
   });
-
+  
   const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: `${projectId}.firebaseapp.com`,
-    projectId: projectId,
+      projectId: projectId,
+      authDomain: `${projectId}.firebaseapp.com`,
   };
 
   // Initialize the Firebase app instance.
   const app = getApps().find(a => a.name === APP_NAME) || initializeApp(firebaseConfig, APP_NAME);
-
+  
   const auth = getAuth(app);
   
   // If we're not already signed in, sign in with the custom token.
@@ -57,10 +57,11 @@ async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firest
     await signInWithCustomToken(auth, token);
   }
   
-  const firestore = getFirestore(app, 'shipment-look');
+  const firestore = getFirestore(app);
 
   // Cache the initialized instances.
   serverApp = app;
+  serverAuth = auth;
   serverFirestore = firestore;
 
   return { firebaseApp: serverApp, firestore: serverFirestore };
@@ -74,3 +75,4 @@ export async function initializeFirebaseOnServer(): Promise<{ firestore: Firesto
   const { firestore } = await initializeServerApp();
   return { firestore };
 }
+
