@@ -66,7 +66,7 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     outputSchema: SyncOutputSchema,
   },
   async ({ days, fromDate, toDate }) => {
-    const { firestore } = initializeFirebaseOnServer();
+    const { firestore } = await initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
     const inboundsColRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
