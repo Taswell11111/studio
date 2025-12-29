@@ -53,6 +53,7 @@ export async function testConnectionsAction() {
     console.error("Critical error in testConnectionsAction:", error);
     return {
       results: [],
+      logs: ['A critical error occurred during connection test.'],
       error: error.message || 'An unknown server error occurred during connection test.',
     }
   }

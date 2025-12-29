@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { RefreshAllButton } from './refresh-all-button';
 import { InboundCard } from './inbound-card';
 import { uploadCsv, clearAllShipments, clearAllInbounds } from '@/app/client-actions';
+import { LogViewer } from './log-viewer';
 
 export default function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,6 +24,7 @@ export default function ShipmentDashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTitle, setProcessingTitle] = useState('');
   const [isTesting, startTestTransition] = useTransition();
+  const [logs, setLogs] = useState<string[]>([]);
 
   const { toast } = useToast();
 
@@ -61,9 +63,12 @@ export default function ShipmentDashboard() {
 
   const handleTestConnections = () => {
     startTestTransition(async () => {
+      setLogs([]); // Clear previous logs
       toast({ title: 'Testing Connections...', description: 'Pinging all configured warehouse APIs.' });
-      const { results, error } = await testConnectionsAction();
+      const { results, error, logs: newLogs } = await testConnectionsAction();
       
+      setLogs(newLogs || ['No logs were returned.']);
+
       if (error) {
         toast({ variant: 'destructive', title: 'Test Failed', description: error });
         return;
@@ -73,22 +78,17 @@ export default function ShipmentDashboard() {
       results.forEach(result => {
         if (result.success) {
           successCount++;
-          toast({
-            variant: 'default',
-            title: `✅ ${result.storeName}: Connected`,
-            description: 'Successfully authenticated with the API.',
-          });
-        } else {
-          toast({
-            variant: 'destructive',
-            title: `❌ ${result.storeName}: Connection Failed`,
-            description: result.error || 'An unknown error occurred.',
-          });
         }
       });
 
       if(successCount === results.length) {
          toast({ title: 'All Connections Successful', description: 'All warehouse APIs are responding correctly.' });
+      } else {
+        toast({
+            variant: 'destructive',
+            title: 'Some Connections Failed',
+            description: `${results.length - successCount} of ${results.length} connections failed. See logs for details.`,
+        });
       }
 
     });
@@ -183,6 +183,8 @@ export default function ShipmentDashboard() {
             </Card>
           )}
         </div>
+
+        {logs.length > 0 && <LogViewer logs={logs} title="Connection Test Logs" />}
 
       </div>
     </>
