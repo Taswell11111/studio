@@ -19,6 +19,7 @@ import {
   type Inbound,
 } from '@/types';
 import { format } from 'date-fns';
+import { z } from 'zod';
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
