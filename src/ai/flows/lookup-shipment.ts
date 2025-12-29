@@ -14,6 +14,7 @@ import {
   type LookupShipmentInput,
   LookupShipmentOutputSchema,
   type LookupShipmentOutput,
+  Inbound,
 } from '@/types';
 
 // Main exported function that the client will call
@@ -71,7 +72,8 @@ const lookupShipmentFlow = ai.defineFlow(
       },
     ];
 
-    let foundShipment: Shipment | null = null;
+    let foundShipment: Shipment | Inbound | null = null;
+    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
     // 2. Iterate through each store to find the order
     for (const creds of credentialsList) {
@@ -88,6 +90,7 @@ const lookupShipmentFlow = ai.defineFlow(
 
       try {
         // --- Try Outbound Lookup ---
+        console.log(`Checking outbound for ${sourceStoreOrderId} in ${creds.name}`);
         const outboundUrl = `https://storeapi.parcelninja.com/api/v1/outbounds/0`;
         const outboundResponse = await fetch(outboundUrl, { method: 'GET', headers });
 
@@ -95,25 +98,28 @@ const lookupShipmentFlow = ai.defineFlow(
           const data = await outboundResponse.json();
           // Verify we got a valid object (checking for a key field like 'id' or 'typeId')
           if (data && data.id) {
+            console.log(`Found outbound order in ${creds.name}`);
             foundShipment = mapParcelninjaToShipment(data, 'Outbound', creds.name);
             break; // Found it!
           }
         }
 
         // --- Try Inbound Lookup ---
+        console.log(`Checking inbound for ${sourceStoreOrderId} in ${creds.name}`);
         const inboundUrl = `https://storeapi.parcelninja.com/api/v1/inbounds/0`;
         const inboundResponse = await fetch(inboundUrl, { method: 'GET', headers });
 
         if (inboundResponse.ok) {
           const data = await inboundResponse.json();
           if (data && data.id) {
+            console.log(`Found inbound order in ${creds.name}`);
             foundShipment = mapParcelninjaToShipment(data, 'Inbound', creds.name);
             break; // Found it!
           }
         }
 
       } catch (err: any) {
-        console.error(`Error checking store ${creds.name}:`, err);
+        console.error(`Error checking store ${creds.name}:`, err.message);
         // Continue to next store
       }
     }
@@ -122,17 +128,16 @@ const lookupShipmentFlow = ai.defineFlow(
       // 3. Save found shipment to Firestore
       try {
         const { firestore } = initializeFirebaseOnServer();
-        const docRef = firestore.collection('shipments').doc(foundShipment.id);
+        const collectionName = foundShipment.Direction === 'Inbound' ? 'inbounds' : 'shipments';
+        const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(foundShipment['Shipment ID']);
         
-        // Add timestamps
         const dataToSave = {
             ...foundShipment,
             updatedAt: new Date(),
         };
 
-        // We use set with merge true to update existing or create new
         await docRef.set(dataToSave, { merge: true });
-        console.log(`Saved shipment ${foundShipment.id} to Firestore.`);
+        console.log(`Saved ${foundShipment.Direction.toLowerCase()} ${foundShipment['Shipment ID']} to Firestore.`);
 
       } catch (dbError) {
         console.error("Failed to save shipment to Firestore:", dbError);
@@ -150,33 +155,22 @@ const lookupShipmentFlow = ai.defineFlow(
 );
 
 // Helper to map API response to our Shipment type
-function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment {
-  // Extract tracking number
-  let trackingNo = '';
-  if (data.deliveryInfo && data.deliveryInfo.waybillNumber) {
-    trackingNo = data.deliveryInfo.waybillNumber;
-  }
+function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
+  const status = data.status ? (data.status.description || 'Unknown') : 'Unknown';
   
-  // Extract status
-  let status = 'Unknown';
-  if (data.status) {
-      status = typeof data.status === 'string' ? data.status : (data.status.description || 'Unknown');
-  }
-
-  return {
-    id: String(data.id),
+  const baseRecord = {
+    id: String(data.clientId || data.id),
     'Direction': direction,
-    'Shipment ID': String(data.id),
+    'Shipment ID': String(data.clientId || data.id),
     'Source Store': storeName,
     'Source Store Order ID': data.clientId || '',
     'Order Date': data.createDate || new Date().toISOString(), // Fallback
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
     'Status': status,
-    'Tracking No': trackingNo,
+    'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || '',
-    'Tracking Link': data.deliveryInfo?.trackingURL || '',
-    'Status Date': new Date().toISOString(),
-    // Add other fields as necessary
+    'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
+    'Status Date': data.status?.timeStamp ? new Date(data.status.timeStamp).toISOString() : new Date().toISOString(),
     'Address Line 1': data.deliveryInfo?.addressLine1 || '',
     'Address Line 2': data.deliveryInfo?.addressLine2 || '',
     'City': data.deliveryInfo?.suburb || '',
@@ -184,6 +178,12 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     'items': data.items ? data.items.map((item: any) => ({
         'Item Name': item.name,
         'Quantity': item.qty,
+        'SKU': item.itemNo,
     })) : [],
   };
+
+  if (direction === 'Inbound') {
+    return baseRecord as Inbound;
+  }
+  return baseRecord as Shipment;
 }

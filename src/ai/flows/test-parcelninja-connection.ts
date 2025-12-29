@@ -52,6 +52,20 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     ];
     
     const testResults: ConnectionTestResult[] = [];
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+    };
+
+    const startDate = formatDate(yesterday);
+    const endDate = formatDate(today);
+
 
     for (const creds of credentialsList) {
       if (!creds.apiUsername || !creds.apiPassword) {
@@ -63,8 +77,8 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
         continue;
       }
 
-      // Make a simple, lightweight API call. Fetching 1 outbound is a good test.
-      const url = 'https://storeapi.parcelninja.com/api/v1/outbounds?limit=1';
+      // A lightweight API call to list outbounds from the last day.
+      const url = `https://storeapi.parcelninja.com/api/v1/outbounds?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
       
       try {
@@ -76,14 +90,14 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
         if (response.ok) {
           testResults.push({ storeName: creds.name, success: true });
         } else {
-          // Attempt to get a meaningful error from the response body
-          const errorBody = await response.text();
           let errorMessage = `API returned status ${response.status}.`;
-          if (errorBody) {
-             errorMessage += ` Body: ${errorBody.substring(0, 100)}`; // Limit error body length
-          }
           if (response.status === 401) {
               errorMessage = 'Authentication failed. Please check API credentials.';
+          } else {
+            try {
+              const errorBody = await response.text();
+              errorMessage += ` Body: ${errorBody.substring(0, 150)}`; // Limit error body length
+            } catch (e) {}
           }
           testResults.push({ storeName: creds.name, success: false, error: errorMessage });
         }
