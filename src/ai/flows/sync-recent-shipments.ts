@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -18,6 +19,8 @@ import type { Inbound, Shipment, ShipmentItem } from '@/types';
 
 const SyncInputSchema = z.object({
   days: z.number().describe('The number of days back to check for updated shipments.'),
+  fromDate: z.string().optional().describe('The start date for the sync in ISO format.'),
+  toDate: z.string().optional().describe('The end date for the sync in ISO format.'),
 });
 type SyncInput = z.infer<typeof SyncInputSchema>;
 
@@ -62,7 +65,7 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     inputSchema: SyncInputSchema,
     outputSchema: SyncOutputSchema,
   },
-  async ({ days }) => {
+  async ({ days, fromDate, toDate }) => {
     const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
@@ -72,12 +75,13 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     let totalUpdated = 0;
     const errorMessages: string[] = [];
 
-    const dateTo = new Date();
-    const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - days);
+    const dateTo = toDate ? new Date(toDate) : new Date();
+    const dateFrom = fromDate ? new Date(fromDate) : new Date(dateTo.getTime() - days * 24 * 60 * 60 * 1000);
     
     const toDateStr = format(dateTo, 'yyyyMMdd');
     const fromDateStr = format(dateFrom, 'yyyyMMdd');
+    
+    console.log(`[Sync Flow] Starting sync from ${fromDateStr} to ${toDateStr}.`);
 
     for (const creds of credentialsMap) {
         if (!creds.apiUsername || !creds.apiPassword) {
@@ -122,17 +126,8 @@ const syncRecentShipmentsFlow = ai.defineFlow(
 // --- HELPER FUNCTIONS ---
 function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
-  // Use status.timeStamp if available, otherwise current time.
-  // Note: Parcelninja API date format is YYYYMMDD or YYYYMMDDHHmmss depending on endpoint, 
-  // but formatApiDate handles 8 digit YYYYMMDD. 
-  // We need to handle full timestamp if it comes in a different format, but assuming formatApiDate logic holds for now or is sufficient.
-  // Actually, let's just trust formatApiDate or fallback to ISO string.
   const statusDate = data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString();
   
-  // Format the status string as requested: "StatusDescription as at [StatusDate]"
-  // We'll format the date nicely for readability in the string, or just keep ISO?
-  // The request said: "Delivered as at [last status update dtae]"
-  // Let's format it readable, e.g., YYYY-MM-DD HH:mm:ss if possible, or just the date part if that's what we have.
   const formattedStatusDate = format(new Date(statusDate), 'yyyy-MM-dd HH:mm');
   const statusWithDate = `${status} as at ${formattedStatusDate}`;
 
@@ -140,10 +135,12 @@ function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', st
     'Direction': direction,
     'Shipment ID': String(data.clientId || data.id),
     'Source Store': storeName,
-    'Source Store Order ID': String(data.channelId || data.clientId || ''), // Changed to prioritize channelId
+    'Source Store Order ID': String(data.clientId || ''),
+    'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
     'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
-    'Status': statusWithDate, // Updated status field
+    'Email': data.deliveryInfo?.email || '',
+    'Status': statusWithDate,
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || storeName,
     'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
@@ -193,9 +190,12 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
         const records = apiRecords[endpoint] || [];
 
         if (!records || records.length === 0) {
+            console.log(`[${creds.name}/${direction}] No records found for the period.`);
             return { created, updated, error };
         }
         
+        console.log(`[${creds.name}/${direction}] Found ${records.length} records. Processing...`);
+
         const updates = records.map(async (record: any) => {
             const docId = String(record.clientId || record.id);
             if (!docId) return;
@@ -205,7 +205,6 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
             const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
 
             if (docSnap.exists) {
-                // Always update the record to ensure all fields are fresh
                 await docRef.set(mappedRecord, { merge: true });
                 updated++;
             } else {

@@ -81,12 +81,12 @@ const lookupShipmentFlow = ai.defineFlow(
   },
   async ({ searchTerm }) => {
     
-    // --- Pass 1: Search Recent Data (last 90 days) ---
+    // --- Pass 1: Search Recent Data (Targeted at your data's date range) ---
     console.log(`Starting Pass 1 (Recent Search) for "${searchTerm}"...`);
-    const today = new Date();
-    const fromDateRecent = new Date();
-    fromDateRecent.setDate(today.getDate() - 90);
-    let foundRecord = await performSearch(searchTerm, fromDateRecent, today);
+    const toDateRecent = new Date('2025-12-29');
+    const fromDateRecent = new Date(toDateRecent);
+    fromDateRecent.setDate(toDateRecent.getDate() - 90);
+    let foundRecord = await performSearch(searchTerm, fromDateRecent, toDateRecent);
 
     // --- Pass 2: Historical Search (if not found in recent) ---
     if (!foundRecord) {
@@ -250,5 +250,3 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
-
-    

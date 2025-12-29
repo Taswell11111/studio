@@ -1,3 +1,4 @@
+
 'use server';
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
@@ -5,12 +6,16 @@ import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connectio
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
- * It calls the sync flow for records from the last 20 days.
+ * It calls the sync flow for a specific date range.
  */
 export async function refreshAllShipmentsAction() {
   try {
-    // Always sync the last 20 days of data.
-    const result = await syncRecentShipments({ days: 20 });
+    // This will sync all records between the specified dates.
+    const fromDate = new Date('2025-12-10');
+    const toDate = new Date('2025-12-29');
+    const days = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 3600 * 24));
+    
+    const result = await syncRecentShipments({ days, fromDate: fromDate.toISOString(), toDate: toDate.toISOString() });
 
     if (!result.success && result.errors.length > 0) {
       console.error('Sync process had errors:', result.errors);
