@@ -3,7 +3,7 @@
 import React from 'react';
 import type { Inbound, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Package, Calendar, User, FileText, Package2, Hash, Truck, MapPin, Building, ShoppingBag, Info, Activity, Link as LinkIcon, RefreshCw, ArchiveRestore } from 'lucide-react';
+import { Package, Calendar, User, FileText, Package2, Hash, Truck, MapPin, Building, ShoppingBag, Info, Activity, Link as LinkIcon, RefreshCw, ArchiveRestore, Mail } from 'lucide-react';
 import { StatusBadge } from './status-badge';
 import { Button } from './ui/button';
 
@@ -34,11 +34,13 @@ export function InboundCard({ item }: InboundCardProps) {
     'Order ID',
     'Source Store Order ID',
     'Customer Name',
+    'Email',
     'Order Date',
     'Courier',
     'Tracking No',
     'Status',
     'Status Date',
+    'Channel ID',
     ...addressFields,
   ];
 
@@ -78,18 +80,21 @@ export function InboundCard({ item }: InboundCardProps) {
       </CardHeader>
       <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
         {/* Core Details */}
-        <DetailItem icon={Calendar} label="Order Date" value={item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'} />
-        <DetailItem icon={Calendar} label="Last Status Update" value={item['Status Date'] ? new Date(item['Status Date']).toLocaleDateString() : 'N/A'} />
-        <DetailItem icon={User} label="Customer" value={item['Customer Name']} fullWidth={true} />
+        <DetailItem icon={User} label="Customer" value={item['Customer Name']} />
+        <DetailItem icon={Mail} label="Email" value={item['Email']} />
+        <div className="md:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
+          <DetailItem icon={Calendar} label="Order Date" value={item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N.A'} />
+          <DetailItem icon={Calendar} label="Last Status Update" value={item['Status Date'] ? new Date(item['Status Date']).toLocaleDateString() : 'N.A'} />
+        </div>
         
-        <div className="md:col-span-2 lg:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
+        <div className="md:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
             <DetailItem icon={Truck} label="Courier" value={item['Courier'] || 'TBD'} />
             <DetailItem icon={Activity} label="Tracking No" value={<p className="font-mono">{item['Tracking No'] || 'Pending'}</p>} />
         </div>
 
         {/* Address Details */}
         {addressDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+            <div className="md:col-span-3 pt-8 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
                     Return Address
@@ -105,7 +110,7 @@ export function InboundCard({ item }: InboundCardProps) {
         
         {/* Item Details */}
         {item.items && item.items.length > 0 && (
-          <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+          <div className="md:col-span-3 pt-8 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
               <Package className="w-4 h-4" />
               Items in Return ({item.items.length})
@@ -125,7 +130,7 @@ export function InboundCard({ item }: InboundCardProps) {
         
         {/* Other Top-Level Details */}
         {otherDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+            <div className="md:col-span-3 pt-8 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Info className="w-4 h-4" />
                     Other Details

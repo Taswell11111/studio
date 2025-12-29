@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import type { Shipment, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
-import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building } from 'lucide-react';
+import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building, Mail, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
@@ -18,7 +18,7 @@ const DetailItem = ({ icon: Icon, label, value, fullWidth = false }: { icon: Rea
         <Icon className="w-5 h-5 text-muted-foreground mt-0.5" />
         <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
-            <div className="text-foreground font-medium break-words">{value}</div>
+            <div className="text-foreground font-medium break-words">{value || 'N/A'}</div>
         </div>
     </div>
 );
@@ -67,8 +67,6 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
             title: 'Status Updated',
             description: `Shipment status is now: ${result.newStatus}`,
           });
-          // Instead of reload, we can optimistically update the UI or refetch data.
-          // For now, a targeted reload or just a toast is fine.
            window.location.reload();
 
         } else {
@@ -94,6 +92,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     'Direction',
     'Source Store',
     'Customer Name',
+    'Email',
     'Order Date',
     'Courier',
     'Tracking No',
@@ -104,6 +103,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     'Status Date',
     'Item Name',
     'Quantity',
+    'Channel ID',
     ...addressFields,
   ];
 
@@ -153,11 +153,16 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
       </CardHeader>
       <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
         {/* Core Details */}
-        <DetailItem icon={Calendar} label="Order Date" value={item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'} />
-        <DetailItem icon={Calendar} label="Last Status Update" value={item['Status Date'] ? new Date(item['Status Date']).toLocaleDateString() : 'N/A'} />
-        <DetailItem icon={User} label="Customer" value={item['Customer Name']} fullWidth={true}/>
+        <DetailItem icon={User} label="Customer" value={item['Customer Name']} />
+        <DetailItem icon={Mail} label="Email" value={item['Email']} />
+        {item['Channel ID'] && <DetailItem icon={Layers} label="Channel ID" value={item['Channel ID']} />}
+        
+        <div className="md:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
+          <DetailItem icon={Calendar} label="Order Date" value={item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'} />
+          <DetailItem icon={Calendar} label="Last Status Update" value={item['Status Date'] ? new Date(item['Status Date']).toLocaleDateString() : 'N/A'} />
+        </div>
 
-        <div className="md:col-span-2 lg:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
+        <div className="md:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
             <DetailItem icon={Truck} label="Courier" value={item['Courier'] || 'TBD'} />
             <DetailItem icon={Activity} label="Tracking No" value={<p className="font-mono">{item['Tracking No'] || 'Pending'}</p>} />
             <DetailItem icon={LinkIcon} label="Tracking Link" value={
@@ -178,7 +183,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
         
         {/* Address Details */}
         {addressDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+            <div className="md:col-span-3 pt-8 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
                     Delivery Address
@@ -194,7 +199,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
         
         {/* Item Details */}
         {item.items && item.items.length > 0 && (
-          <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+          <div className="md:col-span-3 pt-8 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
               <Package className="w-4 h-4" />
               Items in Shipment ({item.items.length})
@@ -215,7 +220,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
 
         {/* Other Top-Level Details */}
         {otherDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+            <div className="md:col-span-3 pt-8 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Info className="w-4 h-4" />
                     Other Details

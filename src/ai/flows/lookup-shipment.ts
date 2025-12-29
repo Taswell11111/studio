@@ -1,9 +1,8 @@
 'use server';
 
 /**
- * @fileOverview A Genkit flow to look up shipment details from Parcelninja API using a generic search term.
- *
- * - lookupShipment - A function that fetches shipment data based on a search term which could be an order ID, customer name, item name, etc.
+ * @fileOverview A Genkit flow to look up shipment details.
+ * It first searches the local Firestore cache and then falls back to the Parcelninja API.
  */
 import { config } from 'dotenv';
 config();
@@ -23,7 +22,6 @@ import { z } from 'zod';
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
-  // The input for the flow is now a generic `searchTerm`
   return lookupShipmentFlow({ searchTerm: input.sourceStoreOrderId });
 }
 
@@ -31,14 +29,12 @@ const DynamicLookupInputSchema = z.object({
   searchTerm: z.string().describe('A generic search term, which can be an Order ID, Customer Name, Item Name, etc.'),
 });
 
-// Define a type for our credentials
 type WarehouseCredentials = {
   name: string;
   apiUsername?: string;
   apiPassword?: string;
 };
 
-// The Genkit flow that orchestrates the lookup process
 const lookupShipmentFlow = ai.defineFlow(
   {
     name: 'lookupShipmentFlow',
@@ -46,7 +42,41 @@ const lookupShipmentFlow = ai.defineFlow(
     outputSchema: LookupShipmentOutputSchema,
   },
   async ({ searchTerm }) => {
-    // 1. Gather all credentials
+    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+    const { firestore } = initializeFirebaseOnServer();
+
+    // 1. Search Firestore first
+    try {
+      const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
+      const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
+
+      // Query by document ID (Shipment ID)
+      const shipmentDoc = await shipmentsRef.doc(searchTerm).get();
+      if (shipmentDoc.exists) {
+        console.log(`[Firestore] Found shipment record by ID: ${searchTerm}`);
+        return { shipment: shipmentDoc.data() as Shipment };
+      }
+      const inboundDoc = await inboundsRef.doc(searchTerm).get();
+      if (inboundDoc.exists) {
+        console.log(`[Firestore] Found inbound record by ID: ${searchTerm}`);
+        return { shipment: inboundDoc.data() as Inbound };
+      }
+      
+      // Add other field queries if needed, e.g., for Source Store Order ID, Customer Name, etc.
+      // This requires indexes to be set up in Firestore for efficient querying.
+      // Example:
+      // const shipmentQuery = await shipmentsRef.where('Source Store Order ID', '==', searchTerm).limit(1).get();
+      // if (!shipmentQuery.empty) {
+      //   return { shipment: shipmentQuery.docs[0].data() as Shipment };
+      // }
+
+    } catch (dbError) {
+      console.error("[Firestore] Error during local search, falling back to API.", dbError);
+    }
+    
+    // 2. If not in Firestore, search Parcelninja API
+    console.log(`[API] Record not in Firestore. Searching Parcelninja for "${searchTerm}"...`);
+
     const credentialsList: WarehouseCredentials[] = [
       { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
       { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
@@ -56,18 +86,15 @@ const lookupShipmentFlow = ai.defineFlow(
     ];
 
     let foundRecord: Shipment | Inbound | null = null;
-    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     
-    // Define a date range for list-based searches (last 90 days)
     const today = new Date();
     const fromDate = new Date();
     fromDate.setDate(today.getDate() - 90);
     const startDate = format(fromDate, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
 
-    // 2. Iterate through each store to find the record
     for (const creds of credentialsList) {
-      if (foundRecord) break; // Exit early if we've found it
+      if (foundRecord) break;
       if (!creds.apiUsername || !creds.apiPassword) {
         console.warn(`Skipping lookup for ${creds.name}: Missing credentials.`);
         continue;
@@ -75,7 +102,6 @@ const lookupShipmentFlow = ai.defineFlow(
 
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
       
-      // Define endpoints to check: ID-based search first, then general search.
       const idEndpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit }[] = [
         { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } },
         { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } }
@@ -86,7 +112,6 @@ const lookupShipmentFlow = ai.defineFlow(
           { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` } }
       ];
 
-      // Prioritize ID-based search for exact matches
       for (const endpoint of idEndpoints) {
         if (foundRecord) break;
         const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, false);
@@ -96,7 +121,6 @@ const lookupShipmentFlow = ai.defineFlow(
         }
       }
 
-      // If not found by ID, try general search
       if(!foundRecord){
         for(const endpoint of searchEndpoints) {
             if (foundRecord) break;
@@ -110,27 +134,24 @@ const lookupShipmentFlow = ai.defineFlow(
     }
 
     if (foundRecord) {
-      // 3. Save found shipment to Firestore
       try {
-        const { firestore } = initializeFirebaseOnServer();
         const collectionName = foundRecord.Direction === 'Inbound' ? 'inbounds' : 'shipments';
         const docId = String(foundRecord['Shipment ID']);
         const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
         
         const dataToSave = { ...foundRecord, updatedAt: new Date().toISOString() };
         await docRef.set(dataToSave, { merge: true });
-        console.log(`Saved ${collectionName} record ${docId} to Firestore.`);
+        console.log(`[API] Saved ${collectionName} record ${docId} to Firestore.`);
 
       } catch (dbError) {
-        console.error("Failed to save record to Firestore:", dbError);
-        // We don't fail the lookup if save fails, but we should log it.
+        console.error("Failed to save API-found record to Firestore:", dbError);
       }
       return { shipment: foundRecord };
     }
 
     return {
       shipment: null,
-      error: 'Record not found in any configured warehouse store using the provided search term.',
+      error: 'Record not found in local cache or any configured warehouse store.',
     };
   }
 );
@@ -144,12 +165,10 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
         if (response.ok) {
             const data = await response.json();
 
-            // Single record from ID search
             if (!isSearch && data && data.id) {
                 console.log(`[${storeName}] Found ${direction} record by ID.`);
                 return mapParcelninjaToShipment(data, direction, storeName);
             }
-            // List from general search
             if (isSearch && data && data[direction.toLowerCase() + 's'] && data[direction.toLowerCase() + 's'].length > 0) {
                  console.log(`[${storeName}] Found ${direction} record by general search.`);
                 const record = data[direction.toLowerCase() + 's'][0];
@@ -159,7 +178,6 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
                     return mapParcelninjaToShipment(fullRecord, direction, storeName);
                 }
             }
-
         } else if (response.status !== 404) {
             const errorText = await response.text();
             console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
@@ -170,8 +188,6 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
     return null;
 }
 
-
-// Helper to map API response to our Shipment/Inbound type
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
   
@@ -180,11 +196,13 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     'Shipment ID': String(data.clientId || data.id),
     'Source Store': storeName,
     'Source Store Order ID': String(data.clientId || ''),
+    'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
     'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
+    'Email': data.deliveryInfo?.email || '',
     'Status': status,
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
-    'Courier': data.deliveryInfo?.courierName || storeName, // Default to store name if no courier
+    'Courier': data.deliveryInfo?.courierName || storeName,
     'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
     'Status Date': data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString(),
     'Address Line 1': data.deliveryInfo?.addressLine1 || '',
@@ -198,7 +216,6 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     })) : [],
   };
 
-  // The 'id' field is for Firestore document ID, which we'll make consistent
   const finalRecord = { ...baseRecord, id: baseRecord['Shipment ID'] };
 
   if (direction === 'Inbound') {
@@ -207,12 +224,11 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
   return finalRecord as Shipment;
 }
 
-// Helper to parse Parcelninja's YYYYMMDDHHmmSS date format
 function formatApiDate(dateStr: string): string {
   if (!dateStr || dateStr.length < 8) return new Date().toISOString();
   try {
     const year = parseInt(dateStr.substring(0, 4), 10);
-    const month = parseInt(dateStr.substring(4, 6), 10) - 1; // JS months are 0-indexed
+    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
     const day = parseInt(dateStr.substring(6, 8), 10);
     return new Date(year, month, day).toISOString();
   } catch (e) {

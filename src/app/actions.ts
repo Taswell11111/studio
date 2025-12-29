@@ -5,12 +5,12 @@ import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connectio
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
- * It calls the sync flow for records updated in the last 3 days.
+ * It calls the sync flow for records updated in the last 20 days.
  */
 export async function refreshAllShipmentsAction() {
   try {
-    // Call the new sync flow for the last 3 days
-    const result = await syncRecentShipments({ days: 3 });
+    // Call the new sync flow for the last 20 days
+    const result = await syncRecentShipments({ days: 20 });
 
     if (!result.success && result.errors.length > 0) {
       console.error('Sync process had errors:', result.errors);
