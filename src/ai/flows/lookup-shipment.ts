@@ -35,6 +35,14 @@ type WarehouseCredentials = {
   apiPassword?: string;
 };
 
+const credentialsList: WarehouseCredentials[] = [
+    { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
+    { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
+    { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD },
+    { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD },
+    { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
+];
+
 const lookupShipmentFlow = ai.defineFlow(
   {
     name: 'lookupShipmentFlow',
@@ -62,28 +70,12 @@ const lookupShipmentFlow = ai.defineFlow(
         return { shipment: inboundDoc.data() as Inbound };
       }
       
-      // Add other field queries if needed, e.g., for Source Store Order ID, Customer Name, etc.
-      // This requires indexes to be set up in Firestore for efficient querying.
-      // Example:
-      // const shipmentQuery = await shipmentsRef.where('Source Store Order ID', '==', searchTerm).limit(1).get();
-      // if (!shipmentQuery.empty) {
-      //   return { shipment: shipmentQuery.docs[0].data() as Shipment };
-      // }
-
     } catch (dbError) {
       console.error("[Firestore] Error during local search, falling back to API.", dbError);
     }
     
     // 2. If not in Firestore, search Parcelninja API
     console.log(`[API] Record not in Firestore. Searching Parcelninja for "${searchTerm}"...`);
-
-    const credentialsList: WarehouseCredentials[] = [
-      { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
-      { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
-      { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD },
-      { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD },
-      { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
-    ];
 
     let foundRecord: Shipment | Inbound | null = null;
     
@@ -132,6 +124,13 @@ const lookupShipmentFlow = ai.defineFlow(
         }
       }
     }
+
+    // 3. If still not found, do a deep search by Channel ID
+    if (!foundRecord) {
+        console.log(`[API] Primary search failed. Starting deep search for Channel ID "${searchTerm}"...`);
+        foundRecord = await searchAllOutboundsByField('channelId', searchTerm);
+    }
+
 
     if (foundRecord) {
       try {
@@ -188,6 +187,51 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
     return null;
 }
 
+/**
+ * Performs a deep search by fetching all outbounds in a date range and matching a field.
+ * This is a fallback for fields that are not directly searchable via the API.
+ */
+async function searchAllOutboundsByField(field: 'channelId', value: string): Promise<Shipment | null> {
+    const today = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(today.getDate() - 90); // Search last 90 days
+    const startDate = format(fromDate, 'yyyyMMdd');
+    const endDate = format(today, 'yyyyMMdd');
+
+    for (const creds of credentialsList) {
+        if (!creds.apiUsername || !creds.apiPassword) continue;
+
+        const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
+        const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1000`;
+
+        try {
+            console.log(`[${creds.name}] Deep searching outbounds for ${field} = ${value}`);
+            const response = await fetch(url, { headers: { 'Authorization': `Basic ${basicAuth}` } });
+            if (!response.ok) continue;
+
+            const data = await response.json();
+            if (!data.outbounds || data.outbounds.length === 0) continue;
+
+            // Find the matching record in the results
+            const foundApiRecord = data.outbounds.find((record: any) => record[field] === value);
+            
+            if (foundApiRecord) {
+                 console.log(`[${creds.name}] Found match by ${field} in deep search. Fetching full details for ID ${foundApiRecord.id}.`);
+                 const fullRecordResponse = await fetch(`https://storeapi.parcelninja.com/api/v1/outbounds/${foundApiRecord.id}`, { headers: { 'Authorization': `Basic ${basicAuth}` } });
+                 if(fullRecordResponse.ok){
+                    const fullRecord = await fullRecordResponse.json();
+                    return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name) as Shipment;
+                 }
+            }
+        } catch (err: any) {
+            console.error(`[${creds.name}] Error during deep search:`, err.message);
+        }
+    }
+
+    return null; // Return null if not found in any store
+}
+
+
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
   
@@ -235,3 +279,5 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
+
+    
