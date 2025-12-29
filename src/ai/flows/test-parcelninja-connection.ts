@@ -17,7 +17,7 @@ const ConnectionTestResultSchema = z.object({
 type ConnectionTestResult = z.infer<typeof ConnectionTestResultSchema>;
 
 const TestConnectionOutputSchema = z.object({
-  results: z.array(ConnectionTestTestResultSchema),
+  results: z.array(ConnectionTestResultSchema),
 });
 export type TestConnectionOutput = z.infer<typeof TestConnectionOutputSchema>;
 
