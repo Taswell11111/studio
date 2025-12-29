@@ -80,13 +80,16 @@ const updateShipmentStatusFlow = ai.defineFlow(
 
     try {
       // ParcelNinja API endpoint for tracking a waybill
+      // Tracking endpoint: https://storeapi.parcelninja.com/api/v1/tracking/events/{trackingNo}
+      // Note: The previous code used this URL. Let's verify if 'trackingNo' is correct param.
+      // Docs say: GET /api/v1/tracking/events/{waybillNo}
       const warehouseApiUrl = `https://storeapi.parcelninja.com/api/v1/tracking/events/${trackingNo}`;
       
       // Encode credentials for Basic Authentication
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
 
       const response = await fetch(warehouseApiUrl, {
-        method: 'GET', // ParcelNinja tracking is a GET request
+        method: 'GET',
         headers: {
           'Authorization': `Basic ${basicAuth}`,
           'Content-Type': 'application/json',
@@ -101,34 +104,42 @@ const updateShipmentStatusFlow = ai.defineFlow(
 
       const data = await response.json();
       
-      // Assuming ParcelNinja returns a structure like { "status": "DELIVERED", "events": [...] }
-      // We need to extract the latest status from the events array if available, or a main status field.
       let newStatus: string | undefined;
-      if (data && Array.isArray(data) && data.length > 0) {
-        // Find the event with the latest timestamp
-        const latestEvent = data.reduce((latest, current) => {
-          const latestTime = new Date(latest.timeStamp).getTime();
-          const currentTime = new Date(current.timeStamp).getTime();
-          return currentTime > latestTime ? current : latest;
-        });
-        newStatus = latestEvent.description;
+      // The API returns a list of events. We want the latest description.
+      // Or maybe it returns { "status": "..." } depending on endpoint.
+      // "Track waybill with event history" -> Returns list of events? 
+      // The docs say: "Returns the full courier tracking information for a waybill."
+      // Let's assume it returns an array of events or an object with 'events'.
+      
+      if (Array.isArray(data) && data.length > 0) {
+         // Sort by timestamp if needed, or assume last is latest?
+         // Let's find the one with the latest timestamp.
+         const latestEvent = data.reduce((prev, current) => {
+            return (new Date(prev.timeStamp).getTime() > new Date(current.timeStamp).getTime()) ? prev : current;
+         });
+         newStatus = latestEvent.description;
+      } else if (data && data.events && Array.isArray(data.events) && data.events.length > 0) {
+          const latestEvent = data.events.reduce((prev: any, current: any) => {
+            return (new Date(prev.timeStamp).getTime() > new Date(current.timeStamp).getTime()) ? prev : current;
+         });
+         newStatus = latestEvent.description;
       } else if (data.status) {
-        newStatus = data.status;
+        newStatus = typeof data.status === 'string' ? data.status : data.status.description;
       }
 
-
       if (!newStatus) {
+         // Fallback if no specific status found
          return { success: false, message: 'ParcelNinja API did not return a valid status or events.' };
       }
 
       // Update the document in Firestore
       const { firestore } = initializeFirebaseOnServer();
-      const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-      const shipmentRef = firestore.collection(`artifacts/${appId}/public/data/shipments`).doc(shipmentId);
+      const shipmentRef = firestore.collection('shipments').doc(shipmentId);
       
       await shipmentRef.update({
         'Status': newStatus,
-        'Status Date': new Date().toISOString(), // Update status date to now
+        'Status Date': new Date().toISOString(),
+        'updatedAt': new Date(), // Important for the "last 3 days" query
       });
 
       return {
