@@ -10,6 +10,7 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import type { Inbound, Shipment, ShipmentItem } from '@/types';
 
 // --- INPUT/OUTPUT SCHEMAS ---
 
@@ -73,12 +74,15 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - days);
     
-    const fromDateStr = format(dateTo, 'yyyy-MM-dd');
-    const toDateStr = format(dateFrom, 'yyyy-MM-dd');
+    // Correctly format dates as YYYYMMDD
+    const toDateStr = format(dateTo, 'yyyyMMdd');
+    const fromDateStr = format(dateFrom, 'yyyyMMdd');
 
     for (const creds of credentialsMap) {
         if (!creds.apiUsername || !creds.apiPassword) {
-            console.warn(`Skipping sync for ${creds.name}: Missing credentials.`);
+            const errorMsg = `Skipping sync for ${creds.name}: Missing credentials.`;
+            console.warn(errorMsg);
+            // Don't push this to errors unless we want to surface it to the user
             continue;
         }
 
@@ -95,7 +99,9 @@ const syncRecentShipmentsFlow = ai.defineFlow(
             if(inboundStats.error) errorMessages.push(`[${creds.name} Inbounds]: ${inboundStats.error}`);
 
         } catch(e: any) {
-            errorMessages.push(`[${creds.name}]: A critical error occurred: ${e.message}`);
+            const errorMsg = `[${creds.name}]: A critical error occurred during sync: ${e.message}`;
+            console.error(errorMsg);
+            errorMessages.push(errorMsg);
         }
     }
 
@@ -115,54 +121,91 @@ const syncRecentShipmentsFlow = ai.defineFlow(
 
 
 // --- HELPER FUNCTIONS ---
+function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
+  const status = data.status?.description || 'Unknown';
+  
+  const baseRecord = {
+    'Direction': direction,
+    'Shipment ID': String(data.clientId || data.id),
+    'Source Store': storeName,
+    'Source Store Order ID': String(data.clientId || ''),
+    'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
+    'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
+    'Status': status,
+    'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
+    'Courier': data.deliveryInfo?.courierName || storeName,
+    'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
+    'Status Date': data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString(),
+    'Address Line 1': data.deliveryInfo?.addressLine1 || '',
+    'Address Line 2': data.deliveryInfo?.addressLine2 || '',
+    'City': data.deliveryInfo?.suburb || '',
+    'Pin Code': data.deliveryInfo?.postalCode || '',
+    'items': data.items ? data.items.map((item: any) => ({
+        'Item Name': item.name,
+        'Quantity': item.qty,
+        'SKU': item.itemNo,
+    })) : [],
+  };
+
+  return { ...baseRecord, id: baseRecord['Shipment ID'] };
+}
+
+
+function formatApiDate(dateStr: string): string {
+  if (!dateStr || dateStr.length < 8) return new Date().toISOString();
+  try {
+    const year = parseInt(dateStr.substring(0, 4), 10);
+    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+    const day = parseInt(dateStr.substring(6, 8), 10);
+    return new Date(year, month, day).toISOString();
+  } catch (e) {
+    return new Date().toISOString();
+  }
+}
 
 async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', collectionRef: FirebaseFirestore.CollectionReference, fromDate: string, toDate: string) {
     let created = 0;
     let updated = 0;
     let error: string | null = null;
+    const direction = endpoint === 'inbounds' ? 'Inbound' : 'Outbound';
     
     try {
-        const records = await fetchFromParcelNinja(creds, endpoint, fromDate, toDate);
+        const apiRecords = await fetchFromParcelNinja(creds, endpoint, fromDate, toDate);
+        const records = apiRecords[endpoint] || [];
 
         if (!records || records.length === 0) {
             return { created, updated, error };
         }
         
-        // Using Promise.all to process records in parallel
-        await Promise.all(records.map(async (record: any) => {
-            const docId = record.clientId || record.id; // Use clientId as the unique ID
+        const updates = records.map(async (record: any) => {
+            const docId = String(record.clientId || record.id);
             if (!docId) return;
 
             const docRef = collectionRef.doc(docId);
             const docSnap = await docRef.get();
-            
-            // Map API response to our Firestore schema
-            const mappedRecord = {
-                'id': docId,
-                'Direction': endpoint === 'inbounds' ? 'Inbound' : 'Outbound',
-                'Shipment ID': docId,
-                'Source Store Order ID': record.clientId,
-                'Order Date': record.timeStamp, // Assuming timeStamp is the order date
-                'Status': record.statusDescription,
-                'Status Date': new Date().toISOString(),
-                'Courier': creds.name, // Assign brand as courier
-                // Add other fields as necessary from the API response
-            };
+            const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
 
             if (docSnap.exists) {
-                await docRef.update({ 
-                    'Status': mappedRecord['Status'],
-                    'Status Date': mappedRecord['Status Date'],
-                });
-                updated++;
+                // Only update if status is different
+                const existingData = docSnap.data();
+                if (existingData?.Status !== mappedRecord.Status) {
+                    await docRef.update({ 
+                        'Status': mappedRecord.Status,
+                        'Status Date': mappedRecord['Status Date'],
+                    });
+                    updated++;
+                }
             } else {
                 await docRef.set(mappedRecord);
                 created++;
             }
-        }));
+        });
+        
+        await Promise.all(updates);
 
     } catch (e: any) {
         error = e.message;
+        console.error(`Error processing ${direction} for ${creds.name}:`, e);
     }
     
     return { created, updated, error };
@@ -170,9 +213,9 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
 
 
 async function fetchFromParcelNinja(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', fromDate: string, toDate: string) {
-    const url = `${WAREHOUSE_API_BASE_URL}/${endpoint}?fromDate=${fromDate}&toDate=${toDate}`;
+    const url = `${WAREHOUSE_API_BASE_URL}/${endpoint}/?startDate=${fromDate}&endDate=${toDate}&pageSize=1000`;
     const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
-
+    
     const response = await fetch(url, {
         method: 'GET',
         headers: { 'Authorization': `Basic ${basicAuth}` }
