@@ -8,3 +8,4 @@ import '@/ai/flows/clear-inbound-data.ts';
 import '@/ai/flows/import-shipment-data-from-csv.ts';
 import '@/ai/flows/sync-recent-shipments.ts';
 import '@/ai/flows/test-parcelninja-connection.ts';
+import '@/ai/flows/lookup-shipment.ts';
