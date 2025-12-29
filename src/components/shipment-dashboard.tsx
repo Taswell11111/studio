@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import type { Shipment, Inbound } from '@/types';
 import { lookupShipment } from '@/ai/flows/lookup-shipment';
 import { testConnectionsAction } from '@/app/actions';
+import { db } from '@/lib/db';
+import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
 
-import { Search, CloudLightning, Share2, AlertCircle, Wifi } from 'lucide-react';
+import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -26,9 +28,47 @@ export default function ShipmentDashboard() {
   const [isTesting, startTestTransition] = useTransition();
   const [logs, setLogs] = useState<string[]>([]);
   const [lastSearchedTerm, setLastSearchedTerm] = useState('');
+  const [recordsCount, setRecordsCount] = useState<number | null>(null);
+  const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
 
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+        const shipmentsColRef = collection(db, `artifacts/${appId}/public/data/shipments`);
+        const snapshot = await getCountFromServer(shipmentsColRef);
+        setRecordsCount(snapshot.data().count);
+        
+        // To get the last sync date, we might query the latest record's Order Date or Status Date.
+        // Assuming recently synced records have recent dates.
+        // Alternatively, if we stored metadata about the sync, we'd fetch that.
+        // For now, let's fetch the most recently created/updated record if possible,
+        // but 'updatedAt' isn't on the schema. 'Status Date' or 'Order Date' might be proxies.
+        // Let's try to get one record ordered by 'Status Date' desc.
+        const q = query(shipmentsColRef, orderBy('Status Date', 'desc'), limit(1));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            const docData = querySnapshot.docs[0].data();
+            // This date reflects the latest data point in the system.
+            // It might not exactly be "when the sync ran", but "latest data available".
+            // If you need exact sync time, we'd need to store it in a separate doc during sync.
+            // For now, "Last data from: ..." might be accurate enough or simply "Latest Record: ..."
+            // But the user asked for "date/time of that" (the records present).
+            // Let's use the current time if we assume the page load refreshes the count.
+            // Or better, let's just show the count for now, and maybe the latest status date found.
+            if(docData['Status Date']) {
+                 setLastSyncDate(new Date(docData['Status Date']).toLocaleString());
+            }
+        }
+      } catch (err) {
+        console.error("Failed to fetch record stats", err);
+      }
+    }
+    fetchStats();
+  }, []);
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -143,7 +183,17 @@ export default function ShipmentDashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
+            
+             <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
+                {recordsCount !== null && (
+                    <div className="hidden lg:flex flex-col items-end mr-4 text-xs text-muted-foreground border-r pr-4">
+                        <div className="flex items-center gap-1 font-semibold text-foreground">
+                            <Database className="w-3 h-3" />
+                            {recordsCount.toLocaleString()} Records
+                        </div>
+                        {lastSyncDate && <span>Latest: {lastSyncDate}</span>}
+                    </div>
+                )}
               <Button onClick={handleTestConnections} disabled={isTesting} variant="outline" size="sm">
                   <Wifi className={`mr-2 h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
                   {isTesting ? 'Testing...' : 'Test Connections'}

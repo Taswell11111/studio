@@ -8,9 +8,9 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
  */
 export function initializeFirebaseOnServer(): { firestore: Firestore } {
   if (admin.apps.length > 0) {
-    // Pass databaseId to getFirestore
+    // Pass databaseId as a string to getFirestore
     return {
-      firestore: getFirestore(undefined, { databaseId: 'shipment-look' }),
+      firestore: getFirestore('shipment-look'), 
     };
   }
 
@@ -25,8 +25,8 @@ export function initializeFirebaseOnServer(): { firestore: Firestore } {
     throw new Error('Could not initialize Firebase Admin SDK. Ensure server environment is configured with appropriate credentials.');
   }
 
-  // Pass databaseId to getFirestore
+  // Pass databaseId as a string to getFirestore
   return {
-    firestore: getFirestore(undefined, { databaseId: 'shipment-look' }),
+    firestore: getFirestore('shipment-look'),
   };
 }

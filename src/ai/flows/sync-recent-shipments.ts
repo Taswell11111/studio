@@ -122,19 +122,32 @@ const syncRecentShipmentsFlow = ai.defineFlow(
 // --- HELPER FUNCTIONS ---
 function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
+  // Use status.timeStamp if available, otherwise current time.
+  // Note: Parcelninja API date format is YYYYMMDD or YYYYMMDDHHmmss depending on endpoint, 
+  // but formatApiDate handles 8 digit YYYYMMDD. 
+  // We need to handle full timestamp if it comes in a different format, but assuming formatApiDate logic holds for now or is sufficient.
+  // Actually, let's just trust formatApiDate or fallback to ISO string.
+  const statusDate = data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString();
   
+  // Format the status string as requested: "StatusDescription as at [StatusDate]"
+  // We'll format the date nicely for readability in the string, or just keep ISO?
+  // The request said: "Delivered as at [last status update dtae]"
+  // Let's format it readable, e.g., YYYY-MM-DD HH:mm:ss if possible, or just the date part if that's what we have.
+  const formattedStatusDate = format(new Date(statusDate), 'yyyy-MM-dd HH:mm');
+  const statusWithDate = `${status} as at ${formattedStatusDate}`;
+
   const baseRecord = {
     'Direction': direction,
     'Shipment ID': String(data.clientId || data.id),
     'Source Store': storeName,
-    'Source Store Order ID': String(data.clientId || ''),
+    'Source Store Order ID': String(data.channelId || data.clientId || ''), // Changed to prioritize channelId
     'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
-    'Status': status,
+    'Status': statusWithDate, // Updated status field
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || storeName,
     'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
-    'Status Date': data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString(),
+    'Status Date': statusDate,
     'Address Line 1': data.deliveryInfo?.addressLine1 || '',
     'Address Line 2': data.deliveryInfo?.addressLine2 || '',
     'City': data.deliveryInfo?.suburb || '',
@@ -156,6 +169,13 @@ function formatApiDate(dateStr: string): string {
     const year = parseInt(dateStr.substring(0, 4), 10);
     const month = parseInt(dateStr.substring(4, 6), 10) - 1;
     const day = parseInt(dateStr.substring(6, 8), 10);
+    // If we have time components, use them
+    if (dateStr.length >= 14) {
+         const hour = parseInt(dateStr.substring(8, 10), 10);
+         const minute = parseInt(dateStr.substring(10, 12), 10);
+         const second = parseInt(dateStr.substring(12, 14), 10);
+         return new Date(year, month, day, hour, minute, second).toISOString();
+    }
     return new Date(year, month, day).toISOString();
   } catch (e) {
     return new Date().toISOString();
