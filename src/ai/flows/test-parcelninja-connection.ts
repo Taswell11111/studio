@@ -68,7 +68,9 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
 
 
     for (const creds of credentialsList) {
+      console.log(`[Connection Test] Testing store: ${creds.name}`);
       if (!creds.apiUsername || !creds.apiPassword) {
+        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - Missing API Username or Password.`);
         testResults.push({
           storeName: creds.name,
           success: false,
@@ -81,13 +83,18 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
       const url = `https://storeapi.parcelninja.com/api/v1/outbounds?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
       
+      console.log(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`);
+
       try {
         const response = await fetch(url, {
           method: 'GET',
           headers: { 'Authorization': `Basic ${basicAuth}` },
         });
+        
+        console.log(`[Connection Test] ⬅️ ${creds.name}: Received status ${response.status}`);
 
         if (response.ok) {
+          console.log(`[Connection Test] ✅ ${creds.name}: SUCCESS`);
           testResults.push({ storeName: creds.name, success: true });
         } else {
           let errorMessage = `API returned status ${response.status}.`;
@@ -99,10 +106,11 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
               errorMessage += ` Body: ${errorBody.substring(0, 150)}`; // Limit error body length
             } catch (e) {}
           }
+          console.error(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMessage}`);
           testResults.push({ storeName: creds.name, success: false, error: errorMessage });
         }
       } catch (err: any) {
-        console.error(`Error testing connection for ${creds.name}:`, err);
+        console.error(`[Connection Test] ❌ ${creds.name}: FAILED - Network or other error:`, err);
         testResults.push({ storeName: creds.name, success: false, error: err.message || 'A network error occurred.' });
       }
     }
