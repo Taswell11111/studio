@@ -5,6 +5,8 @@
  * @fileOverview A Genkit flow to look up shipment details.
  * It performs a comprehensive search across all configured Parcelninja stores,
  * prioritizing the store based on the first letter of the search term.
+ * It uses a two-pass strategy: a fast search for recent items, and a comprehensive
+ * historical search if the recent search fails.
  */
 import { config } from 'dotenv';
 config();
@@ -48,7 +50,6 @@ const credentialsList: WarehouseCredentials[] = [
 
 const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
 
-
 async function fetchFromParcelNinja(url: string, storeName: string, creds: WarehouseCredentials, extraHeaders = {}) {
     if (!creds.apiUsername || !creds.apiPassword) {
         console.warn(`[${storeName}] Skipping API call: Missing credentials.`);
@@ -79,12 +80,46 @@ const lookupShipmentFlow = ai.defineFlow(
     outputSchema: LookupShipmentOutputSchema,
   },
   async ({ searchTerm }) => {
-    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-    const { firestore } = initializeFirebaseOnServer();
     
-    let foundRecord: Shipment | Inbound | null = null;
-    
-    // Implement store search prioritization based on prefix
+    // --- Pass 1: Search Recent Data (last 90 days) ---
+    console.log(`Starting Pass 1 (Recent Search) for "${searchTerm}"...`);
+    const today = new Date();
+    const fromDateRecent = new Date();
+    fromDateRecent.setDate(today.getDate() - 90);
+    let foundRecord = await performSearch(searchTerm, fromDateRecent, today);
+
+    // --- Pass 2: Historical Search (if not found in recent) ---
+    if (!foundRecord) {
+        console.log(`Not found in recent data. Starting Pass 2 (Historical Search) for "${searchTerm}"...`);
+        const fromDateHistorical = new Date('2014-01-01'); // Far in the past
+        const toDateHistorical = new Date('2030-01-01'); // Far in the future
+        foundRecord = await performSearch(searchTerm, fromDateHistorical, toDateHistorical);
+    }
+
+    if (foundRecord) {
+      console.log(`Search successful. Found record in ${foundRecord['Source Store']}.`);
+      await saveRecordToFirestore(foundRecord);
+      return { shipment: foundRecord };
+    }
+
+    // --- Final Fallback: Search Local Cache ---
+    console.log("No live result found. Falling back to Firestore cache search.");
+    const cachedRecord = await searchFirestoreCache(searchTerm);
+    if (cachedRecord) {
+      return { shipment: cachedRecord };
+    }
+
+    return {
+      shipment: null,
+      error: 'Record not found in any configured warehouse store or local cache.',
+    };
+  }
+);
+
+/**
+ * Performs the actual search logic for a given date range.
+ */
+async function performSearch(searchTerm: string, fromDate: Date, toDate: Date): Promise<Shipment | Inbound | null> {
     const searchPrefix = searchTerm.charAt(0).toUpperCase();
     const sortedCreds = [...credentialsList].sort((a, b) => {
         if (a.prefix === searchPrefix) return -1;
@@ -92,29 +127,19 @@ const lookupShipmentFlow = ai.defineFlow(
         return 0;
     });
 
-    // Date range for general search queries - search last 90 days.
-    const today = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(today.getDate() - 90);
     const startDate = format(fromDate, 'yyyyMMdd');
-    const endDate = format(today, 'yyyyMMdd');
+    const endDate = format(toDate, 'yyyyMMdd');
 
     for (const creds of sortedCreds) {
-        console.log(`[${creds.name}] Starting comprehensive search for "${searchTerm}"...`);
+        console.log(`[${creds.name}] Searching between ${startDate} and ${endDate}...`);
         
         // 1. Exact ID lookup for Outbounds
         let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data) {
-            foundRecord = mapParcelninjaToShipment(data, 'Outbound', creds.name);
-            break;
-        }
+        if (data) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
 
         // 2. Exact ID lookup for Inbounds
         data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data) {
-            foundRecord = mapParcelninjaToShipment(data, 'Inbound', creds.name);
-            break;
-        }
+        if (data) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
         
         // 3. General search for Outbounds
         const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`;
@@ -122,10 +147,7 @@ const lookupShipmentFlow = ai.defineFlow(
         if (data && data.outbounds && data.outbounds.length > 0) {
             const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}`;
             const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord) {
-              foundRecord = mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
-              break;
-            }
+            if (fullRecord) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
         }
         
         // 4. General search for Inbounds
@@ -134,50 +156,49 @@ const lookupShipmentFlow = ai.defineFlow(
         if (data && data.inbounds && data.inbounds.length > 0) {
             const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}`;
             const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord) {
-              foundRecord = mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
-              break;
-            }
+            if (fullRecord) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
         }
     }
+    return null;
+}
 
-    if (foundRecord) {
-      console.log(`Live API search successful. Found record in ${foundRecord['Source Store']}.`);
-      try {
-        const collectionName = foundRecord.Direction === 'Inbound' ? 'inbounds' : 'shipments';
-        const docId = String(foundRecord.id);
-        const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
-        
-        const dataToSave = { ...foundRecord, updatedAt: new Date().toISOString() };
-        await docRef.set(dataToSave, { merge: true });
-        console.log(`Saved/Updated record ${docId} in Firestore at path: ${docRef.path}.`);
+/**
+ * Saves the found record to the correct Firestore collection.
+ */
+async function saveRecordToFirestore(record: Shipment | Inbound) {
+  try {
+    const { firestore } = initializeFirebaseOnServer();
+    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+    const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
+    const docId = String(record.id);
+    const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
+    
+    const dataToSave = { ...record, updatedAt: new Date().toISOString() };
+    await docRef.set(dataToSave, { merge: true });
+    console.log(`Saved/Updated record ${docId} in Firestore at path: ${docRef.path}.`);
+  } catch (dbError) {
+    console.error("Failed to save API-found record to Firestore:", dbError);
+  }
+}
 
-        return { shipment: foundRecord };
+/**
+ * Searches the Firestore cache for a matching record.
+ */
+async function searchFirestoreCache(searchTerm: string): Promise<Shipment | Inbound | null> {
+    const { firestore } = initializeFirebaseOnServer();
+    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
-      } catch (dbError) {
-        console.error("Failed to save API-found record to Firestore:", dbError);
-        // Return the record even if DB save fails
-        return { shipment: foundRecord };
-      }
-    }
-
-    // Final fallback to local cache if no live result found
-    console.log("No live result found. Falling back to Firestore cache search.");
     const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
     const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
     const shipmentSnap = await shipmentsRef.doc(searchTerm).get();
-    if(shipmentSnap.exists) return { shipment: { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment };
+    if(shipmentSnap.exists) return { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment;
 
     const inboundSnap = await inboundsRef.doc(searchTerm).get();
-    if(inboundSnap.exists) return { shipment: { id: inboundSnap.id, ...inboundSnap.data() } as Inbound };
-
-    return {
-      shipment: null,
-      error: 'Record not found in any configured warehouse store or local cache.',
-    };
-  }
-);
+    if(inboundSnap.exists) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
+    
+    return null;
+}
 
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
@@ -229,3 +250,5 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
+
+    
