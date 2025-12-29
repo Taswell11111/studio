@@ -2,34 +2,27 @@
 import * as admin from 'firebase-admin';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-const APP_NAME = 'SHIPMENT_LOOK_ADMIN';
+const APP_NAME = 'SHIPMENT_LOOK_ADMIN_APP';
 
 /**
- * Initializes the Firebase Admin SDK on the server for a specific database.
+ * Initializes the Firebase Admin SDK on the server.
  * This is used by Genkit flows to interact with Firestore with admin privileges.
- * It ensures that a single instance for the named database is created and reused.
+ * It ensures that a single instance is created and reused.
  */
 export function initializeFirebaseOnServer(): { firestore: Firestore } {
-  // Check if our specifically named app already exists.
-  const existingApp = admin.apps.find(app => app?.name === APP_NAME);
-  if (existingApp) {
-    return { firestore: getFirestore(existingApp) };
-  }
-
-  try {
-    // Initialize a new app instance with a unique name and the correct database ID.
-    const newApp = admin.initializeApp({
-      // The databaseURL is crucial for targeting a non-default Firestore database.
-      databaseURL: `https://${process.env.GCLOUD_PROJECT}.firebaseio.com`,
-      // databaseId is not a valid admin.initializeApp option, so we specify it via databaseURL logic.
-      // We also need to specify the project ID for the SDK to work correctly in some environments.
-      projectId: process.env.GCLOUD_PROJECT,
+  // The Admin SDK automatically finds credentials in a Google Cloud environment.
+  // We initialize without specific options to let this happen.
+  // We use a named app to prevent conflicts if other initializations exist.
+  if (!admin.apps.find(app => app?.name === APP_NAME)) {
+    admin.initializeApp({
+        // No explicit config needed here; it will use Application Default Credentials.
     }, APP_NAME);
-
-    return { firestore: getFirestore(newApp, 'shipment-look') };
-
-  } catch (error: any) {
-    console.error(`Firebase Admin SDK initialization for ${APP_NAME} failed:`, error.message);
-    throw new Error(`Could not initialize Firebase Admin SDK. Ensure server environment is configured with appropriate credentials.`);
   }
+  
+  const app = admin.app(APP_NAME);
+
+  // Get the Firestore instance for the specific 'shipment-look' database.
+  const firestore = getFirestore(app, 'shipment-look');
+  
+  return { firestore };
 }
