@@ -2,19 +2,26 @@
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
+import { differenceInDays } from 'date-fns';
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
- * It calls the sync flow for records updated in the last 20 days.
+ * It calls the sync flow for records from a specific start date.
  */
 export async function refreshAllShipmentsAction() {
   try {
-    // Call the new sync flow for the last 20 days
-    const result = await syncRecentShipments({ days: 20 });
+    // Calculate the number of days from Dec 10, 2025 to today
+    const startDate = new Date('2025-12-10T00:00:00Z');
+    const today = new Date();
+    const daysToSync = differenceInDays(today, startDate);
+    
+    // Ensure we sync at least one day if the date is in the future or same day
+    const days = daysToSync > 0 ? daysToSync : 1;
+
+    const result = await syncRecentShipments({ days });
 
     if (!result.success && result.errors.length > 0) {
       console.error('Sync process had errors:', result.errors);
-      // Return a structured error message summarizing the failures
       return { 
         success: false, 
         successCount: result.recordsUpdated, 
@@ -36,7 +43,7 @@ export async function refreshAllShipmentsAction() {
     return { 
         success: false, 
         successCount: 0,
-        failCount: 1, // Represents the entire action failing
+        failCount: 1,
         error: errorMessage 
     };
   }

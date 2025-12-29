@@ -2,7 +2,7 @@
 
 /**
  * @fileOverview A Genkit flow to look up shipment details.
- * It first searches the local Firestore cache and then falls back to the Parcelninja API.
+ * It now performs a comprehensive search across all configured Parcelninja stores.
  */
 import { config } from 'dotenv';
 config();
@@ -52,36 +52,13 @@ const lookupShipmentFlow = ai.defineFlow(
   async ({ searchTerm }) => {
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     const { firestore } = initializeFirebaseOnServer();
-
-    // 1. Search Firestore first
-    try {
-      const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
-      const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
-
-      // Query by document ID (Shipment ID)
-      const shipmentDoc = await shipmentsRef.doc(searchTerm).get();
-      if (shipmentDoc.exists) {
-        console.log(`[Firestore] Found shipment record by ID: ${searchTerm}`);
-        return { shipment: shipmentDoc.data() as Shipment };
-      }
-      const inboundDoc = await inboundsRef.doc(searchTerm).get();
-      if (inboundDoc.exists) {
-        console.log(`[Firestore] Found inbound record by ID: ${searchTerm}`);
-        return { shipment: inboundDoc.data() as Inbound };
-      }
-      
-    } catch (dbError) {
-      console.error("[Firestore] Error during local search, falling back to API.", dbError);
-    }
     
-    // 2. If not in Firestore, search Parcelninja API
-    console.log(`[API] Record not in Firestore. Searching Parcelninja for "${searchTerm}"...`);
-
     let foundRecord: Shipment | Inbound | null = null;
     
+    // Date range for general search queries
     const today = new Date();
     const fromDate = new Date();
-    fromDate.setDate(today.getDate() - 90);
+    fromDate.setDate(today.getDate() - 90); // Search last 90 days for broad queries
     const startDate = format(fromDate, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
 
@@ -94,33 +71,22 @@ const lookupShipmentFlow = ai.defineFlow(
 
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
       
-      const idEndpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit }[] = [
-        { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } },
-        { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } }
+      // Define all possible endpoints to check for each store
+      const endpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit, isSearch: boolean }[] = [
+        // 1. Exact ID match (most efficient)
+        { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm }, isSearch: false },
+        { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm }, isSearch: false },
+        // 2. General search (fallback)
+        { type: 'Outbound', url: `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` }, isSearch: true },
+        { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` }, isSearch: true }
       ];
 
-      const searchEndpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit }[] = [
-          { type: 'Outbound', url: `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` } },
-          { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` } }
-      ];
-
-      for (const endpoint of idEndpoints) {
+      for (const endpoint of endpoints) {
         if (foundRecord) break;
-        const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, false);
+        const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, endpoint.isSearch);
         if(result) {
             foundRecord = result;
             break;
-        }
-      }
-
-      if(!foundRecord){
-        for(const endpoint of searchEndpoints) {
-            if (foundRecord) break;
-            const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, true);
-            if(result) {
-                foundRecord = result;
-                break;
-            }
         }
       }
     }
@@ -131,16 +97,16 @@ const lookupShipmentFlow = ai.defineFlow(
         foundRecord = await searchAllOutboundsByField('channelId', searchTerm);
     }
 
-
     if (foundRecord) {
       try {
         const collectionName = foundRecord.Direction === 'Inbound' ? 'inbounds' : 'shipments';
         const docId = String(foundRecord['Shipment ID']);
+        // Correctly save to the namespaced collection path
         const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
         
         const dataToSave = { ...foundRecord, updatedAt: new Date().toISOString() };
         await docRef.set(dataToSave, { merge: true });
-        console.log(`[API] Saved ${collectionName} record ${docId} to Firestore.`);
+        console.log(`[API] Saved ${collectionName} record ${docId} to Firestore at path: ${docRef.path}.`);
 
       } catch (dbError) {
         console.error("Failed to save API-found record to Firestore:", dbError);
@@ -164,14 +130,18 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
         if (response.ok) {
             const data = await response.json();
 
+            // For exact ID match calls
             if (!isSearch && data && data.id) {
                 console.log(`[${storeName}] Found ${direction} record by ID.`);
                 return mapParcelninjaToShipment(data, direction, storeName);
             }
-            if (isSearch && data && data[direction.toLowerCase() + 's'] && data[direction.toLowerCase() + 's'].length > 0) {
+            // For general search calls
+            const recordListKey = direction.toLowerCase() + 's';
+            if (isSearch && data && data[recordListKey] && data[recordListKey].length > 0) {
                  console.log(`[${storeName}] Found ${direction} record by general search.`);
-                const record = data[direction.toLowerCase() + 's'][0];
-                const fullRecordResponse = await fetch(`https://storeapi.parcelninja.com/api/v1/${direction.toLowerCase()}s/${record.id}`, { headers });
+                const record = data[recordListKey][0];
+                const detailUrl = `https://storeapi.parcelninja.com/api/v1/${recordListKey}/${record.id}`;
+                const fullRecordResponse = await fetch(detailUrl, { headers });
                 if(fullRecordResponse.ok) {
                     const fullRecord = await fullRecordResponse.json();
                     return mapParcelninjaToShipment(fullRecord, direction, storeName);
@@ -179,7 +149,10 @@ async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound
             }
         } else if (response.status !== 404) {
             const errorText = await response.text();
-            console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
+            // Don't log 404s as errors, they are expected when a record isn't in a specific store
+            if (response.status !== 404) {
+              console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
+            }
         }
     } catch (err: any) {
         console.error(`[${storeName}] Network error checking ${direction}:`, err.message);
@@ -279,5 +252,3 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
-
-    
