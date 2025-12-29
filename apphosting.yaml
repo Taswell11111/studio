@@ -13,6 +13,9 @@ runConfig:
   maxInstances: 1
   # Make the secrets available as environment variables
   availableSecrets:
+    - SERVICE_ACCOUNT_EMAIL
+    - SERVICE_ACCOUNT_PRIVATE_KEY
+    - NEXT_PUBLIC_FIREBASE_PROJECT_ID
     - DIESEL_WAREHOUSE_API_USERNAME
     - DIESEL_WAREHOUSE_API_PASSWORD
     - DIESEL_WAREHOUSE_STORE_ID
