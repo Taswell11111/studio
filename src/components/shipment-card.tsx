@@ -1,16 +1,18 @@
+
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import type { Shipment, ShipmentItem } from '@/types';
+import type { Inbound, Shipment, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
-import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building, Mail, Layers } from 'lucide-react';
+import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building, Mail, Layers, ArchiveRestore } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
 
 type ShipmentCardProps = {
   item: Shipment;
+  relatedInbound?: Inbound | null;
 };
 
 const DetailItem = ({ icon: Icon, label, value, fullWidth = false }: { icon: React.ElementType, label: string, value: React.ReactNode, fullWidth?: boolean }) => (
@@ -39,7 +41,7 @@ const getTrackingLink = (item: Shipment): string => {
     return item['Tracking Link'] as string || '';
 }
 
-export function ShipmentCard({ item }: ShipmentCardProps) {
+export function ShipmentCard({ item, relatedInbound }: ShipmentCardProps) {
   const { toast } = useToast();
   const [isUpdating, startUpdateTransition] = useTransition();
 
@@ -113,6 +115,8 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
   
   const addressDetails = addressFields.map(field => ({field, value: item[field]})).filter(d => d.value);
 
+  const searchTime = new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short'});
+
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-2">
       <CardHeader className="bg-secondary/50 p-6">
@@ -124,19 +128,22 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
                         {item['Direction']} Shipment
                     </p>
                     <span className="text-primary/30">|</span>
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <p className="text-lg font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                         <Building className="w-4 h-4" />
                         {item['Source Store']}
                     </p>
                 </div>
                 <h2 className="font-mono font-bold text-2xl text-primary mt-2">{item['Shipment ID']}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Source Order ID:</p>
-                  <p className="font-mono text-sm">{item['Source Store Order ID']}</p>
-                </div>
+                {relatedInbound && (
+                    <div className="mt-2 flex items-center gap-2 text-amber-700 font-semibold text-xs py-1 px-2 bg-amber-100 rounded-md">
+                        <ArchiveRestore className="w-4 h-4" />
+                        <span>Related Inbound Return Found</span>
+                    </div>
+                )}
             </div>
-            <div className="flex flex-col items-end gap-2 self-start">
+            <div className="flex flex-col items-end gap-2 self-start text-right">
                 <StatusBadge status={item['Status'] || 'UNKNOWN'} />
+                <p className="text-xs text-muted-foreground">as at {searchTime}</p>
                  <Button 
                     size="sm" 
                     variant="outline" 
@@ -204,17 +211,13 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
               <Package className="w-4 h-4" />
               Items in Shipment ({item.items.length})
             </h3>
-            <div className="space-y-4">
+            <ul className="list-disc list-inside space-y-2">
               {item.items.map((shipmentItem: ShipmentItem, index: number) => (
-                <div key={index} className="p-4 rounded-lg border bg-secondary/30">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <DetailItem icon={ShoppingBag} label="Item Name" value={shipmentItem['Item Name'] || 'N/A'} />
-                      <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
-                      <DetailItem icon={ClipboardList} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
-                  </div>
-                </div>
+                <li key={index} className="text-sm">
+                  <span className="font-semibold">{shipmentItem['SKU']}</span> - Qty: {shipmentItem['Quantity']}
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
 
@@ -236,3 +239,5 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
     </Card>
   );
 }
+
+    

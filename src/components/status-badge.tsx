@@ -1,3 +1,4 @@
+
 'use client';
 
 import { cn } from '@/lib/utils';
@@ -27,10 +28,12 @@ export function StatusBadge({ status }: { status: string }) {
 
   return (
     <div className={cn(
-      "px-4 py-1.5 rounded-full text-sm font-bold border whitespace-nowrap",
+      "px-4 py-2 rounded-full text-base font-bold border whitespace-nowrap",
       colorClass
     )}>
       {status || 'UNKNOWN'}
     </div>
   );
 }
+
+    

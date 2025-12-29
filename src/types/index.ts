@@ -94,7 +94,10 @@ export const LookupShipmentInputSchema = z.object({
 export type LookupShipmentInput = z.infer<typeof LookupShipmentInputSchema>;
 
 export const LookupShipmentOutputSchema = z.object({
-  shipment: z.custom<Shipment>().nullable(),
+  shipment: z.custom<Shipment | Inbound>().nullable(),
+  relatedInbound: z.custom<Inbound>().nullable().optional(),
   error: z.string().optional(),
 });
 export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
+
+    

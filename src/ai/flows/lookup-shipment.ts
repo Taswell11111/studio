@@ -6,7 +6,7 @@
  * It performs a comprehensive search across all configured Parcelninja stores,
  * prioritizing the store based on the first letter of the search term.
  * It uses a two-pass strategy: a fast search for recent items, and a comprehensive
- * historical search if the recent search fails.
+ * historical search if the recent search fails. It also looks for related inbound shipments.
  */
 import { config } from 'dotenv';
 config();
@@ -56,7 +56,7 @@ async function fetchFromParcelNinja(url: string, storeName: string, creds: Wareh
         return null;
     }
     const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
-    const headers = { 'Authorization': `Basic ${basicAuth}`, ...extraHeaders };
+    const headers = { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/json', ...extraHeaders };
 
     try {
         const response = await fetch(url, { method: 'GET', headers });
@@ -95,26 +95,44 @@ const lookupShipmentFlow = ai.defineFlow(
         const toDateHistorical = new Date('2030-01-01'); // Far in the future
         foundRecord = await performSearch(searchTerm, fromDateHistorical, toDateHistorical);
     }
-
+    
+    let relatedInbound: Inbound | null = null;
     if (foundRecord) {
       console.log(`Search successful. Found record in ${foundRecord['Source Store']}.`);
       await saveRecordToFirestore(foundRecord);
-      return { shipment: foundRecord };
+
+      // If it's an outbound shipment, look for a related inbound return
+      if (foundRecord.Direction === 'Outbound') {
+          const numericId = foundRecord['Shipment ID'].replace(/\D/g, '');
+          if (numericId) {
+              const returnId = `RET-${numericId}`;
+              console.log(`Outbound found, searching for related inbound: ${returnId}`);
+              relatedInbound = (await performSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
+              if (relatedInbound) {
+                console.log(`Found related inbound: ${relatedInbound['Shipment ID']}`);
+                await saveRecordToFirestore(relatedInbound);
+              }
+          }
+      }
+
+      return { shipment: foundRecord, relatedInbound: relatedInbound };
     }
 
     // --- Final Fallback: Search Local Cache ---
     console.log("No live result found. Falling back to Firestore cache search.");
     const cachedRecord = await searchFirestoreCache(searchTerm);
     if (cachedRecord) {
-      return { shipment: cachedRecord };
+      return { shipment: cachedRecord, relatedInbound: null }; // Related search from cache is complex, skipping for now
     }
 
     return {
       shipment: null,
+      relatedInbound: null,
       error: 'Record not found in any configured warehouse store or local cache.',
     };
   }
 );
+
 
 /**
  * Performs the actual search logic for a given date range.
@@ -131,32 +149,32 @@ async function performSearch(searchTerm: string, fromDate: Date, toDate: Date): 
     const endDate = format(toDate, 'yyyyMMdd');
 
     for (const creds of sortedCreds) {
-        console.log(`[${creds.name}] Searching between ${startDate} and ${endDate}...`);
+        console.log(`[${creds.name}] Searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
         
         // 1. Exact ID lookup for Outbounds
         let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
+        if (data && data.id) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
 
         // 2. Exact ID lookup for Inbounds
         data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
+        if (data && data.id) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
         
         // 3. General search for Outbounds
-        const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`;
+        const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
         data = await fetchFromParcelNinja(outboundSearchUrl, creds.name, creds);
         if (data && data.outbounds && data.outbounds.length > 0) {
-            const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}`;
+            const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}/events`;
             const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
+            if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
         }
         
         // 4. General search for Inbounds
-        const inboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`;
+        const inboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
         data = await fetchFromParcelNinja(inboundSearchUrl, creds.name, creds);
         if (data && data.inbounds && data.inbounds.length > 0) {
-            const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}`;
+            const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}/events`;
             const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
+            if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
         }
     }
     return null;
@@ -191,6 +209,7 @@ async function searchFirestoreCache(searchTerm: string): Promise<Shipment | Inbo
     const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
     const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
+    // Try to get by document ID first
     const shipmentSnap = await shipmentsRef.doc(searchTerm).get();
     if(shipmentSnap.exists) return { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment;
 
@@ -201,8 +220,16 @@ async function searchFirestoreCache(searchTerm: string): Promise<Shipment | Inbo
 }
 
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
-  const status = data.status?.description || 'Unknown';
-  const statusDate = data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString();
+    const latestEvent = Array.isArray(data.events) && data.events.length > 0 
+        ? data.events.reduce((latest: any, current: any) => {
+            const latestTime = latest.timeStamp ? parseInt(latest.timeStamp, 10) : 0;
+            const currentTime = current.timeStamp ? parseInt(current.timeStamp, 10) : 0;
+            return currentTime > latestTime ? current : latest;
+        })
+        : data.status;
+
+    const status = latestEvent?.description || 'Unknown';
+    const statusDate = latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date().toISOString();
   
   const baseRecord = {
     'Direction': direction,
@@ -243,10 +270,12 @@ function formatApiDate(dateStr: string): string {
       const hour = parseInt(dateStr.substring(8, 10), 10);
       const minute = parseInt(dateStr.substring(10, 12), 10);
       const second = parseInt(dateStr.substring(12, 14), 10);
-      return new Date(year, month, day, hour, minute, second).toISOString();
+      return new Date(Date.UTC(year, month, day, hour, minute, second)).toISOString();
     }
-    return new Date(year, month, day).toISOString();
+    return new Date(Date.UTC(year, month, day)).toISOString();
   } catch (e) {
     return new Date().toISOString();
   }
 }
+
+    

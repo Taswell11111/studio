@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -5,10 +6,10 @@ import type { Inbound, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Package, Calendar, User, FileText, Package2, Hash, Truck, MapPin, Building, ShoppingBag, Info, Activity, Link as LinkIcon, RefreshCw, ArchiveRestore, Mail } from 'lucide-react';
 import { StatusBadge } from './status-badge';
-import { Button } from './ui/button';
 
 type InboundCardProps = {
   item: Inbound;
+  isRelated?: boolean;
 };
 
 const DetailItem = ({ icon: Icon, label, value, fullWidth = false }: { icon: React.ElementType, label: string, value: React.ReactNode, fullWidth?: boolean }) => (
@@ -22,7 +23,7 @@ const DetailItem = ({ icon: Icon, label, value, fullWidth = false }: { icon: Rea
 );
 
 
-export function InboundCard({ item }: InboundCardProps) {
+export function InboundCard({ item, isRelated = false }: InboundCardProps) {
 
   const addressFields = ['Address Line 1', 'Address Line 2', 'City', 'State', 'Pin Code', 'Country'];
   
@@ -50,10 +51,11 @@ export function InboundCard({ item }: InboundCardProps) {
   
   const addressDetails = addressFields.map(field => ({field, value: item[field]})).filter(d => d.value);
 
+  const searchTime = new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short'});
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-2 border-amber-200">
-      <CardHeader className="bg-amber-50/50 p-6">
+    <Card className={`overflow-hidden hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-2 ${isRelated ? 'border-amber-400 mt-4' : 'border-amber-200'}`}>
+      <CardHeader className={`${isRelated ? 'bg-amber-100/60' : 'bg-amber-50/50'} p-6`}>
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
                  <div className="flex items-center gap-3">
@@ -62,19 +64,16 @@ export function InboundCard({ item }: InboundCardProps) {
                         {item['Direction']}
                     </p>
                     <span className="text-amber-300">|</span>
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <p className="text-lg font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                         <Building className="w-4 h-4" />
                         {item['Source Store']}
                     </p>
                 </div>
                 <h2 className="font-mono font-bold text-2xl text-amber-900 mt-2">{item['Shipment ID']}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Source Order ID:</p>
-                  <p className="font-mono text-sm">{item['Source Store Order ID'] || 'N/A'}</p>
-                </div>
             </div>
-            <div className="flex flex-col items-end gap-2 self-start">
+            <div className="flex flex-col items-end gap-2 self-start text-right">
                 <StatusBadge status={item['Status'] || 'UNKNOWN'} />
+                <p className="text-xs text-muted-foreground">as at {searchTime}</p>
             </div>
         </div>
       </CardHeader>
@@ -115,16 +114,13 @@ export function InboundCard({ item }: InboundCardProps) {
               <Package className="w-4 h-4" />
               Items in Return ({item.items.length})
             </h3>
-            <div className="space-y-4">
-              {item.items.map((shipmentItem: ShipmentItem, index: number) => (
-                <div key={index} className="p-4 rounded-lg border bg-secondary/30">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <DetailItem icon={ShoppingBag} label="Item Name" value={shipmentItem['Item Name'] || 'N/A'} />
-                      <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ul className="list-disc list-inside space-y-2">
+                {item.items.map((shipmentItem: ShipmentItem, index: number) => (
+                    <li key={index} className="text-sm">
+                        <span className="font-semibold">{shipmentItem['SKU']}</span> - Qty: {shipmentItem['Quantity']}
+                    </li>
+                ))}
+            </ul>
           </div>
         )}
         
@@ -146,3 +142,5 @@ export function InboundCard({ item }: InboundCardProps) {
     </Card>
   );
 }
+
+    

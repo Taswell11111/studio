@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
@@ -10,18 +11,22 @@ import { collection, getCountFromServer, getDocs, limit, query, orderBy } from '
 import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ShipmentCard } from '@/components/shipment-card';
 import { ProcessingModal } from '@/components/processing-modal';
 import { useToast } from '@/hooks/use-toast';
 import { RefreshAllButton } from './refresh-all-button';
 import { InboundCard } from './inbound-card';
-import { uploadCsv, clearAllShipments, clearAllInbounds } from '@/app/client-actions';
 import { LogViewer } from './log-viewer';
+
+type SearchResult = {
+    shipment: Shipment | Inbound | null;
+    relatedInbound?: Inbound | null;
+};
 
 export default function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResult, setSearchResult] = useState<Shipment | Inbound | null>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTitle, setProcessingTitle] = useState('');
@@ -43,23 +48,10 @@ export default function ShipmentDashboard() {
         const snapshot = await getCountFromServer(shipmentsColRef);
         setRecordsCount(snapshot.data().count);
         
-        // To get the last sync date, we might query the latest record's Order Date or Status Date.
-        // Assuming recently synced records have recent dates.
-        // Alternatively, if we stored metadata about the sync, we'd fetch that.
-        // For now, let's fetch the most recently created/updated record if possible,
-        // but 'updatedAt' isn't on the schema. 'Status Date' or 'Order Date' might be proxies.
-        // Let's try to get one record ordered by 'Status Date' desc.
         const q = query(shipmentsColRef, orderBy('Status Date', 'desc'), limit(1));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
             const docData = querySnapshot.docs[0].data();
-            // This date reflects the latest data point in the system.
-            // It might not exactly be "when the sync ran", but "latest data available".
-            // If you need exact sync time, we'd need to store it in a separate doc during sync.
-            // For now, "Last data from: ..." might be accurate enough or simply "Latest Record: ..."
-            // But the user asked for "date/time of that" (the records present).
-            // Let's use the current time if we assume the page load refreshes the count.
-            // Or better, let's just show the count for now, and maybe the latest status date found.
             if(docData['Status Date']) {
                  setLastSyncDate(new Date(docData['Status Date']).toLocaleString());
             }
@@ -81,12 +73,10 @@ export default function ShipmentDashboard() {
     startSearchTransition(async () => {
       setSearchResult(null); // Clear previous result
       try {
-        // The input to lookupShipment is now a generic search term,
-        // but the schema expects `sourceStoreOrderId`. We adapt here.
         const result = await lookupShipment({ sourceStoreOrderId: trimmedSearch });
         
         if (result.shipment) {
-          setSearchResult(result.shipment);
+          setSearchResult({ shipment: result.shipment, relatedInbound: result.relatedInbound });
           toast({
             title: "Record Found",
             description: `Displaying record matching "${trimmedSearch}"`,
@@ -159,11 +149,27 @@ export default function ShipmentDashboard() {
   };
   
   const DisplayCard = () => {
-      if (!searchResult) return null;
-      if (searchResult.Direction === 'Inbound') {
-          return <InboundCard item={searchResult as Inbound} />;
-      }
-      return <ShipmentCard item={searchResult as Shipment} />;
+      if (!searchResult || !searchResult.shipment) return null;
+      
+      const primaryRecord = searchResult.shipment;
+      const relatedRecord = searchResult.relatedInbound;
+
+      return (
+        <div>
+            {primaryRecord.Direction === 'Inbound' ? (
+                <InboundCard item={primaryRecord as Inbound} />
+            ) : (
+                <ShipmentCard item={primaryRecord as Shipment} relatedInbound={relatedRecord} />
+            )}
+
+            {relatedRecord && (
+                <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-2 text-center text-muted-foreground">Related Inbound Return</h3>
+                    <InboundCard item={relatedRecord} isRelated={true} />
+                </div>
+            )}
+        </div>
+      );
   }
 
   return (
@@ -252,3 +258,5 @@ export default function ShipmentDashboard() {
     </>
   );
 }
+
+    
