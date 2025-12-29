@@ -4,7 +4,7 @@ import React, { useState, useTransition, useEffect } from 'react';
 import type { Shipment, Inbound } from '@/types';
 import { lookupShipment } from '@/ai/flows/lookup-shipment';
 import { testConnectionsAction } from '@/app/actions';
-import { db } from '@/lib/db';
+import { initializeFirebase } from '@/firebase';
 import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
 
 import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database } from 'lucide-react';
@@ -37,6 +37,7 @@ export default function ShipmentDashboard() {
   useEffect(() => {
     async function fetchStats() {
       try {
+        const { firestore: db } = initializeFirebase();
         const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
         const shipmentsColRef = collection(db, `artifacts/${appId}/public/data/shipments`);
         const snapshot = await getCountFromServer(shipmentsColRef);
