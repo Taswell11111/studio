@@ -3,10 +3,11 @@
 
 /**
  * @fileOverview A Genkit flow to look up shipment details.
- * It performs a comprehensive search across all configured Parcelninja stores,
- * prioritizing the store based on the first letter of the search term.
- * It uses a two-pass strategy: a fast search for recent items, and a comprehensive
- * historical search if the recent search fails. It also looks for related inbound shipments.
+ * It now implements a "local-first" search strategy.
+ * 1. It first queries the local Firestore database for a quick result.
+ * 2. If not found locally, it performs a comprehensive live search across all configured Parcelninja stores.
+ * 3. It prioritizes the live search based on the first letter of the search term.
+ * 4. It also looks for related inbound shipments for any found outbound record.
  */
 import { config } from 'dotenv';
 config();
@@ -81,24 +82,50 @@ const lookupShipmentFlow = ai.defineFlow(
   },
   async ({ searchTerm }) => {
     
-    // --- Pass 1: Search Recent Data (Targeted at your data's date range) ---
-    console.log(`Starting Pass 1 (Recent Search) for "${searchTerm}"...`);
+    // --- Pass 1: Search Local Cache (Firestore) ---
+    console.log(`Starting Pass 1 (Local Cache Search) for "${searchTerm}"...`);
+    let foundRecord = await searchFirestoreCache(searchTerm);
+    
+    if (foundRecord) {
+        console.log(`Record found in local cache.`);
+        // Even if found locally, we might need to find its related inbound record
+        let relatedInbound = null;
+        if (foundRecord.Direction === 'Outbound') {
+             const numericId = foundRecord['Shipment ID'].replace(/\D/g, '');
+             if(numericId) {
+                const returnId = `RET-${numericId}`;
+                console.log(`Outbound found, searching for related inbound: ${returnId}`);
+                // Search for the related inbound, starting with local cache
+                relatedInbound = await searchFirestoreCache(returnId);
+                if(!relatedInbound){
+                     // If not in cache, try live API
+                     relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
+                     if(relatedInbound) await saveRecordToFirestore(relatedInbound);
+                }
+             }
+        }
+        return { shipment: foundRecord, relatedInbound };
+    }
+
+
+    // --- Pass 2: Live API Search (if not in cache) ---
+    console.log(`Not found in local cache. Starting Pass 2 (Live API Search) for "${searchTerm}"...`);
     const toDateRecent = new Date('2025-12-29');
     const fromDateRecent = new Date(toDateRecent);
     fromDateRecent.setDate(toDateRecent.getDate() - 90);
-    let foundRecord = await performSearch(searchTerm, fromDateRecent, toDateRecent);
+    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent);
 
-    // --- Pass 2: Historical Search (if not found in recent) ---
+    // --- Pass 3: Historical Live Search (if not found in recent) ---
     if (!foundRecord) {
-        console.log(`Not found in recent data. Starting Pass 2 (Historical Search) for "${searchTerm}"...`);
-        const fromDateHistorical = new Date('2014-01-01'); // Far in the past
-        const toDateHistorical = new Date('2030-01-01'); // Far in the future
-        foundRecord = await performSearch(searchTerm, fromDateHistorical, toDateHistorical);
+        console.log(`Not found in recent data. Starting Pass 3 (Historical Live Search) for "${searchTerm}"...`);
+        const fromDateHistorical = new Date('2014-01-01');
+        const toDateHistorical = new Date('2030-01-01');
+        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical);
     }
     
     let relatedInbound: Inbound | null = null;
     if (foundRecord) {
-      console.log(`Search successful. Found record in ${foundRecord['Source Store']}.`);
+      console.log(`Live search successful. Found record in ${foundRecord['Source Store']}.`);
       await saveRecordToFirestore(foundRecord);
 
       // If it's an outbound shipment, look for a related inbound return
@@ -107,7 +134,7 @@ const lookupShipmentFlow = ai.defineFlow(
           if (numericId) {
               const returnId = `RET-${numericId}`;
               console.log(`Outbound found, searching for related inbound: ${returnId}`);
-              relatedInbound = (await performSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
+              relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
               if (relatedInbound) {
                 console.log(`Found related inbound: ${relatedInbound['Shipment ID']}`);
                 await saveRecordToFirestore(relatedInbound);
@@ -116,13 +143,6 @@ const lookupShipmentFlow = ai.defineFlow(
       }
 
       return { shipment: foundRecord, relatedInbound: relatedInbound };
-    }
-
-    // --- Final Fallback: Search Local Cache ---
-    console.log("No live result found. Falling back to Firestore cache search.");
-    const cachedRecord = await searchFirestoreCache(searchTerm);
-    if (cachedRecord) {
-      return { shipment: cachedRecord, relatedInbound: null }; // Related search from cache is complex, skipping for now
     }
 
     return {
@@ -135,9 +155,9 @@ const lookupShipmentFlow = ai.defineFlow(
 
 
 /**
- * Performs the actual search logic for a given date range.
+ * Performs the actual live search logic for a given date range.
  */
-async function performSearch(searchTerm: string, fromDate: Date, toDate: Date): Promise<Shipment | Inbound | null> {
+async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date): Promise<Shipment | Inbound | null> {
     const searchPrefix = searchTerm.charAt(0).toUpperCase();
     const sortedCreds = [...credentialsList].sort((a, b) => {
         if (a.prefix === searchPrefix) return -1;
@@ -149,7 +169,7 @@ async function performSearch(searchTerm: string, fromDate: Date, toDate: Date): 
     const endDate = format(toDate, 'yyyyMMdd');
 
     for (const creds of sortedCreds) {
-        console.log(`[${creds.name}] Searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
+        console.log(`[${creds.name}] Live searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
         
         // 1. Exact ID lookup for Outbounds
         let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
@@ -216,6 +236,24 @@ async function searchFirestoreCache(searchTerm: string): Promise<Shipment | Inbo
     const inboundSnap = await inboundsRef.doc(searchTerm).get();
     if(inboundSnap.exists) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
     
+    // Fallback to querying fields if not found by ID
+    const fieldsToSearch = ['Source Store Order ID', 'Channel ID', 'Customer Name', 'Tracking No'];
+    for (const field of fieldsToSearch) {
+        const shipmentQuery = shipmentsRef.where(field, '==', searchTerm).limit(1);
+        const shipmentQuerySnap = await shipmentQuery.get();
+        if(!shipmentQuerySnap.empty) {
+            const doc = shipmentQuerySnap.docs[0];
+            return { id: doc.id, ...doc.data() } as Shipment;
+        }
+
+        const inboundQuery = inboundsRef.where(field, '==', searchTerm).limit(1);
+        const inboundQuerySnap = await inboundQuery.get();
+        if(!inboundQuerySnap.empty) {
+            const doc = inboundQuerySnap.docs[0];
+            return { id: doc.id, ...doc.data() } as Inbound;
+        }
+    }
+
     return null;
 }
 
@@ -250,9 +288,9 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     'City': data.deliveryInfo?.suburb || '',
     'Pin Code': data.deliveryInfo?.postalCode || '',
     'items': data.items ? data.items.map((item: any) => ({
-        'Item Name': item.name,
-        'Quantity': item.qty,
         'SKU': item.itemNo,
+        'Quantity': item.qty,
+        'Item Name': item.name,
     })) : [],
   };
 
@@ -278,4 +316,5 @@ function formatApiDate(dateStr: string): string {
   }
 }
 
+    
     
