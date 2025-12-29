@@ -13,8 +13,8 @@ type ShipmentCardProps = {
   item: Shipment;
 };
 
-const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: React.ReactNode }) => (
-    <div className="flex items-start gap-3">
+const DetailItem = ({ icon: Icon, label, value, fullWidth = false }: { icon: React.ElementType, label: string, value: React.ReactNode, fullWidth?: boolean }) => (
+    <div className={`flex items-start gap-3 ${fullWidth ? 'col-span-1 md:col-span-2 lg:col-span-3' : ''}`}>
         <Icon className="w-5 h-5 text-muted-foreground mt-0.5" />
         <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
@@ -67,7 +67,10 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
             title: 'Status Updated',
             description: `Shipment status is now: ${result.newStatus}`,
           });
-          console.log(`Successfully updated status for shipment ID ${item.id} to: ${result.newStatus}`);
+          // Instead of reload, we can optimistically update the UI or refetch data.
+          // For now, a targeted reload or just a toast is fine.
+           window.location.reload();
+
         } else {
           throw new Error(result.message);
         }
@@ -88,6 +91,8 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
   const excludedKeys = [
     'id',
     'items',
+    'Direction',
+    'Source Store',
     'Customer Name',
     'Order Date',
     'Courier',
@@ -113,64 +118,83 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
       <CardHeader className="bg-secondary/50 p-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Shipment ID</p>
-                <h2 className="font-mono font-bold text-2xl text-primary mt-1">{item['Shipment ID']}</h2>
-                <div className="flex items-center gap-2 mt-2">
-                  <Building className="w-4 h-4 text-muted-foreground" />
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Source Store Order ID:</p>
+                <div className="flex items-center gap-3">
+                    <p className="text-sm font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
+                        <Truck className="w-4 h-4"/>
+                        {item['Direction']} Shipment
+                    </p>
+                    <span className="text-primary/30">|</span>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                        <Building className="w-4 h-4" />
+                        {item['Source Store']}
+                    </p>
+                </div>
+                <h2 className="font-mono font-bold text-2xl text-primary mt-2">{item['Shipment ID']}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Source Order ID:</p>
                   <p className="font-mono text-sm">{item['Source Store Order ID']}</p>
                 </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-2">
-                    <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={handleRefreshStatus} 
-                        disabled={isUpdating}
-                        title={'Refresh shipment status'}
-                    >
-                        <RefreshCw className={isUpdating ? 'animate-spin' : ''} />
-                        <span>{isUpdating ? 'Updating...' : 'Refresh'}</span>
-                    </Button>
-                    <StatusBadge status={item['Status'] || 'UNKNOWN'} />
-                </div>
-                {item['Status Date'] && (
-                    <div className="text-xs text-muted-foreground text-right">
-                        as of {new Date(item['Status Date']).toLocaleDateString()}
-                    </div>
-                )}
+            <div className="flex flex-col items-end gap-2 self-start">
+                <StatusBadge status={item['Status'] || 'UNKNOWN'} />
+                 <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={handleRefreshStatus} 
+                    disabled={isUpdating}
+                    title={'Refresh shipment status'}
+                    className="h-8"
+                >
+                    <RefreshCw className={`w-3 h-3 mr-2 ${isUpdating ? 'animate-spin' : ''}`} />
+                    <span>{isUpdating ? 'Updating...' : 'Refresh'}</span>
+                </Button>
             </div>
         </div>
       </CardHeader>
       <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
         {/* Core Details */}
-        <DetailItem icon={User} label="Customer" value={item['Customer Name']} />
         <DetailItem icon={Calendar} label="Order Date" value={item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'} />
-        <DetailItem icon={Truck} label="Courier" value={item['Courier'] || 'TBD'} />
-        <DetailItem icon={Activity} label="Tracking No" value={<p className="font-mono">{item['Tracking No'] || 'Pending'}</p>} />
-        <div className="flex items-start gap-3 md:col-span-2 lg:col-span-1">
-            <LinkIcon className="w-5 h-5 text-muted-foreground mt-0.5" />
-            <div className="w-full overflow-hidden">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tracking Link</p>
-                {trackingLink ? (
+        <DetailItem icon={Calendar} label="Last Status Update" value={item['Status Date'] ? new Date(item['Status Date']).toLocaleDateString() : 'N/A'} />
+        <DetailItem icon={User} label="Customer" value={item['Customer Name']} fullWidth={true}/>
+
+        <div className="md:col-span-2 lg:col-span-3 border-t pt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-8">
+            <DetailItem icon={Truck} label="Courier" value={item['Courier'] || 'TBD'} />
+            <DetailItem icon={Activity} label="Tracking No" value={<p className="font-mono">{item['Tracking No'] || 'Pending'}</p>} />
+            <DetailItem icon={LinkIcon} label="Tracking Link" value={
+                trackingLink ? (
                 <a 
                     href={trackingLink} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="text-primary hover:underline truncate block text-sm mt-1"
+                    className="text-primary hover:underline truncate block"
                 >
                     {trackingLink}
                 </a>
                 ) : (
-                <span className="text-muted-foreground italic text-sm">Not available yet</span>
-                )}
-            </div>
+                <span className="text-muted-foreground italic">Not available</span>
+                )
+            } fullWidth={true} />
         </div>
+        
+        {/* Address Details */}
+        {addressDetails.length > 0 && (
+            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Delivery Address
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+                    <DetailItem icon={MapPin} label="Address Line 1" value={item['Address Line 1']} />
+                    {item['Address Line 2'] && <DetailItem icon={MapPin} label="Address Line 2" value={item['Address Line 2']} />}
+                    <DetailItem icon={MapPin} label="City / Suburb" value={item['City']} />
+                    <DetailItem icon={MapPin} label="Postal Code" value={item['Pin Code']} />
+                </div>
+            </div>
+        )}
         
         {/* Item Details */}
         {item.items && item.items.length > 0 && (
-          <div className="md:col-span-2 lg:col-span-3 pt-6 border-t">
+          <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
               <Package className="w-4 h-4" />
               Items in Shipment ({item.items.length})
@@ -181,6 +205,7 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       <DetailItem icon={ShoppingBag} label="Item Name" value={shipmentItem['Item Name'] || 'N/A'} />
                       <DetailItem icon={Hash} label="Quantity" value={shipmentItem['Quantity'] || '1'} />
+                      <DetailItem icon={ClipboardList} label="SKU" value={shipmentItem['SKU'] || 'N/A'} />
                   </div>
                 </div>
               ))}
@@ -188,25 +213,9 @@ export function ShipmentCard({ item }: ShipmentCardProps) {
           </div>
         )}
 
-        {/* Address Details */}
-        {addressDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-6 border-t">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    Delivery Address
-                </h3>
-                <div className="text-foreground font-medium space-y-0.5">
-                    <p>{item['Address Line 1']}</p>
-                    {item['Address Line 2'] && <p>{item['Address Line 2']}</p>}
-                    <p>{item['City']}, {item['State']} {item['Pin Code']}</p>
-                    <p>{item['Country']}</p>
-                </div>
-            </div>
-        )}
-        
         {/* Other Top-Level Details */}
         {otherDetails.length > 0 && (
-            <div className="md:col-span-2 lg:col-span-3 pt-6 border-t">
+            <div className="md:col-span-2 lg:col-span-3 pt-8 border-t">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Info className="w-4 h-4" />
                     Other Details

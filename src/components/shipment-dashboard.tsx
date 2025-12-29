@@ -25,29 +25,36 @@ export default function ShipmentDashboard() {
   const [processingTitle, setProcessingTitle] = useState('');
   const [isTesting, startTestTransition] = useTransition();
   const [logs, setLogs] = useState<string[]>([]);
+  const [lastSearchedTerm, setLastSearchedTerm] = useState('');
+
 
   const { toast } = useToast();
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!searchTerm.trim()) return;
+    const trimmedSearch = searchTerm.trim();
+    if (!trimmedSearch) return;
+    
+    setLastSearchedTerm(trimmedSearch);
 
     startSearchTransition(async () => {
       setSearchResult(null); // Clear previous result
       try {
-        const result = await lookupShipment({ sourceStoreOrderId: searchTerm.trim() });
+        // The input to lookupShipment is now a generic search term,
+        // but the schema expects `sourceStoreOrderId`. We adapt here.
+        const result = await lookupShipment({ sourceStoreOrderId: trimmedSearch });
         
         if (result.shipment) {
           setSearchResult(result.shipment);
           toast({
-            title: "Order Found",
-            description: `Found order ${result.shipment['Source Store Order ID']}`,
+            title: "Record Found",
+            description: `Displaying record matching "${trimmedSearch}"`,
           });
         } else {
           toast({
             variant: "destructive",
             title: "Not Found",
-            description: result.error || "Could not find any shipment with that Order ID.",
+            description: result.error || `Could not find any record matching "${trimmedSearch}".`,
           });
         }
       } catch (err: any) {
@@ -120,7 +127,7 @@ export default function ShipmentDashboard() {
 
   return (
     <>
-      <ProcessingModal isOpen={isSearching || isProcessing} title={isSearching ? "Searching Warehouse..." : processingTitle} />
+      <ProcessingModal isOpen={isSearching || isProcessing} title={isSearching ? "Searching Warehouses..." : processingTitle} />
       
       <div className="max-w-7xl mx-auto space-y-6">
         <Card className="p-4 sm:p-6">
@@ -152,7 +159,7 @@ export default function ShipmentDashboard() {
           <Input
             type="text"
             className="w-full pl-11 pr-32 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
-            placeholder="Enter Order ID (e.g. PO-12345)..."
+            placeholder="Search by Order ID, Customer Name, Item..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -169,17 +176,21 @@ export default function ShipmentDashboard() {
           {searchResult ? (
             <DisplayCard />
           ) : (
-             !isSearching && searchTerm && (
+             isSearching ? (
                 <div className="text-center py-12 text-muted-foreground">
-                    <p>No results to display for that Order ID.</p>
+                    <p>Searching for "{lastSearchedTerm}"...</p>
+                </div>
+             ) : lastSearchedTerm && (
+                <div className="text-center py-12 text-muted-foreground">
+                    <p>No results to display for "{lastSearchedTerm}".</p>
                 </div>
              )
           )}
           
-          {!searchResult && !searchTerm && (
+          {!searchResult && !lastSearchedTerm && !isSearching && (
             <Card className="text-center py-12 text-muted-foreground border-dashed bg-secondary/10">
               <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>Enter a Source Store Order ID above to check its status.</p>
+              <p>Enter an Order ID, Customer Name, or Item Name to check its status.</p>
             </Card>
           )}
         </div>

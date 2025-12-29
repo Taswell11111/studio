@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * @fileOverview A Genkit flow to look up shipment details from Parcelninja API using an order ID.
+ * @fileOverview A Genkit flow to look up shipment details from Parcelninja API using a generic search term.
  *
- * - lookupShipment - A function that fetches shipment data based on a source store order ID (X-Client-Id) and saves it to Firestore.
+ * - lookupShipment - A function that fetches shipment data based on a search term which could be an order ID, customer name, item name, etc.
  */
 import { config } from 'dotenv';
 config();
@@ -16,13 +16,19 @@ import {
   type LookupShipmentInput,
   LookupShipmentOutputSchema,
   type LookupShipmentOutput,
-  type Inbound, // Ensure Inbound is typed correctly
+  type Inbound,
 } from '@/types';
+import { format } from 'date-fns';
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
-  return lookupShipmentFlow(input);
+  // The input for the flow is now a generic `searchTerm`
+  return lookupShipmentFlow({ searchTerm: input.sourceStoreOrderId });
 }
+
+const DynamicLookupInputSchema = z.object({
+  searchTerm: z.string().describe('A generic search term, which can be an Order ID, Customer Name, Item Name, etc.'),
+});
 
 // Define a type for our credentials
 type WarehouseCredentials = {
@@ -35,10 +41,10 @@ type WarehouseCredentials = {
 const lookupShipmentFlow = ai.defineFlow(
   {
     name: 'lookupShipmentFlow',
-    inputSchema: LookupShipmentInputSchema,
+    inputSchema: DynamicLookupInputSchema,
     outputSchema: LookupShipmentOutputSchema,
   },
-  async ({ sourceStoreOrderId }) => {
+  async ({ searchTerm }) => {
     // 1. Gather all credentials
     const credentialsList: WarehouseCredentials[] = [
       { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
@@ -48,84 +54,121 @@ const lookupShipmentFlow = ai.defineFlow(
       { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
     ];
 
-    let foundShipment: Shipment | Inbound | null = null;
+    let foundRecord: Shipment | Inbound | null = null;
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+    
+    // Define a date range for list-based searches (last 90 days)
+    const today = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(today.getDate() - 90);
+    const startDate = format(fromDate, 'yyyyMMdd');
+    const endDate = format(today, 'yyyyMMdd');
 
-    // 2. Iterate through each store to find the order
+    // 2. Iterate through each store to find the record
     for (const creds of credentialsList) {
-      if (foundShipment) break; // Exit early if we've found it
+      if (foundRecord) break; // Exit early if we've found it
       if (!creds.apiUsername || !creds.apiPassword) {
         console.warn(`Skipping lookup for ${creds.name}: Missing credentials.`);
         continue;
       }
 
       const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
-      const headers = {
-        'Authorization': `Basic ${basicAuth}`,
-        'X-Client-Id': sourceStoreOrderId,
-      };
-
-      // Define endpoints to check
-      const endpoints: { type: 'Outbound' | 'Inbound', url: string }[] = [
-        { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0' },
-        { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0' }
+      
+      // Define endpoints to check: ID-based search first, then general search.
+      const idEndpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit }[] = [
+        { type: 'Outbound', url: 'https://storeapi.parcelninja.com/api/v1/outbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } },
+        { type: 'Inbound', url: 'https://storeapi.parcelninja.com/api/v1/inbounds/0', headers: { 'Authorization': `Basic ${basicAuth}`, 'X-Client-Id': searchTerm } }
       ];
 
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`[${creds.name}] Checking ${endpoint.type} for Order ID: ${sourceStoreOrderId}`);
-          const response = await fetch(endpoint.url, { method: 'GET', headers });
+      const searchEndpoints: { type: 'Outbound' | 'Inbound', url: string, headers: HeadersInit }[] = [
+          { type: 'Outbound', url: `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` } },
+          { type: 'Inbound', url: `https://storeapi.parcelninja.com/api/v1/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&search=${encodeURIComponent(searchTerm)}`, headers: { 'Authorization': `Basic ${basicAuth}` } }
+      ];
 
-          if (response.ok) {
-            const data = await response.json();
-            // A valid response for a single record will be an object with an 'id'
-            if (data && data.id) {
-              console.log(`[${creds.name}] Found ${endpoint.type} order.`);
-              foundShipment = mapParcelninjaToShipment(data, endpoint.type, creds.name);
-              break; // Found it, break from the inner loop
+      // Prioritize ID-based search for exact matches
+      for (const endpoint of idEndpoints) {
+        if (foundRecord) break;
+        const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, false);
+        if(result) {
+            foundRecord = result;
+            break;
+        }
+      }
+
+      // If not found by ID, try general search
+      if(!foundRecord){
+        for(const endpoint of searchEndpoints) {
+            if (foundRecord) break;
+            const result = await queryEndpoint(creds.name, endpoint.type, endpoint.url, endpoint.headers, true);
+            if(result) {
+                foundRecord = result;
+                break;
             }
-          } else if (response.status !== 404) {
-            // Log errors that are not 'Not Found'
-            const errorText = await response.text();
-            console.error(`[${creds.name}] API Error for ${endpoint.type} (${response.status}): ${errorText}`);
-          }
-        } catch (err: any) {
-          console.error(`[${creds.name}] Network error checking ${endpoint.type}:`, err.message);
         }
       }
     }
 
-    if (foundShipment) {
+    if (foundRecord) {
       // 3. Save found shipment to Firestore
       try {
         const { firestore } = initializeFirebaseOnServer();
-        // Determine collection based on direction
-        const collectionName = foundShipment.Direction === 'Inbound' ? 'inbounds' : 'shipments';
-        const docId = String(foundShipment['Shipment ID']);
+        const collectionName = foundRecord.Direction === 'Inbound' ? 'inbounds' : 'shipments';
+        const docId = String(foundRecord['Shipment ID']);
         const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
         
-        const dataToSave = {
-            ...foundShipment,
-            updatedAt: new Date().toISOString(),
-        };
-
+        const dataToSave = { ...foundRecord, updatedAt: new Date().toISOString() };
         await docRef.set(dataToSave, { merge: true });
         console.log(`Saved ${collectionName} record ${docId} to Firestore.`);
 
       } catch (dbError) {
-        console.error("Failed to save shipment to Firestore:", dbError);
+        console.error("Failed to save record to Firestore:", dbError);
         // We don't fail the lookup if save fails, but we should log it.
       }
-
-      return { shipment: foundShipment };
+      return { shipment: foundRecord };
     }
 
     return {
       shipment: null,
-      error: 'Order not found in any configured warehouse store.',
+      error: 'Record not found in any configured warehouse store using the provided search term.',
     };
   }
 );
+
+
+async function queryEndpoint(storeName: string, direction: 'Outbound' | 'Inbound', url: string, headers: HeadersInit, isSearch: boolean): Promise<Shipment | Inbound | null> {
+    try {
+        console.log(`[${storeName}] Checking ${direction} at ${url}`);
+        const response = await fetch(url, { method: 'GET', headers });
+
+        if (response.ok) {
+            const data = await response.json();
+
+            // Single record from ID search
+            if (!isSearch && data && data.id) {
+                console.log(`[${storeName}] Found ${direction} record by ID.`);
+                return mapParcelninjaToShipment(data, direction, storeName);
+            }
+            // List from general search
+            if (isSearch && data && data[direction.toLowerCase() + 's'] && data[direction.toLowerCase() + 's'].length > 0) {
+                 console.log(`[${storeName}] Found ${direction} record by general search.`);
+                const record = data[direction.toLowerCase() + 's'][0];
+                const fullRecordResponse = await fetch(`https://storeapi.parcelninja.com/api/v1/${direction.toLowerCase()}s/${record.id}`, { headers });
+                if(fullRecordResponse.ok) {
+                    const fullRecord = await fullRecordResponse.json();
+                    return mapParcelninjaToShipment(fullRecord, direction, storeName);
+                }
+            }
+
+        } else if (response.status !== 404) {
+            const errorText = await response.text();
+            console.error(`[${storeName}] API Error for ${direction} (${response.status}): ${errorText}`);
+        }
+    } catch (err: any) {
+        console.error(`[${storeName}] Network error checking ${direction}:`, err.message);
+    }
+    return null;
+}
+
 
 // Helper to map API response to our Shipment/Inbound type
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
