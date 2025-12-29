@@ -1,0 +1,2677 @@
+FORMAT: 1A
+HOST: https://storeapi.parcelninja.com/api/v1
+
+# Parcelninja REST API v1.0
+Please note that [**Basic Authentication**](https://swagger.io/docs/specification/authentication/basic-authentication/) is required on all requests.  
+
+The API can be called at `https://storeapi.parcelninja.com/api/v1`
+
+All example calls to the "Mock Server" will return a hard-coded response. The Basic Authentication details supplied are not validated for these calls.
+
+Follow [@PN_Status](https://twitter.com/PN_Status) on Twitter for maintenance announcements or downtime.  `https://twitter.com/PN_Status`
+
+Please email [ITSupport@parcelninja.com](mailto:itsupport@parcelninja.com) for queries. You will need to quote and provide the *x-request-id* returned by the API for queries.
+
+
+
+## Rate Limiting
+
+API rate limit is 4,000 requests per hour. Exceeding the limit will result in the HTTP Status code "429 - Too Many Requests" response.
+
+## Standards
+
+1. All timestamps are provided in UTC timezone. Format YYYYMMDDHHmmSS
+
+# How should the Parcelninja API be used?
+Parcelninja should be seen as the master of all stock. ERP systems should not be used as stock masters. This is because the stock reported by an ERP system may not match the actual stock within in the warehouse for a variety of reasons (damaged stock, incorrect stock submitted, incorrect SKU's etc). You can however, keep a snapshot of stock within 3rd party systems but these systems will have to regularly update from the Parcelninja API using the Inventory Endpoint (detailed below in the document).
+
+We have found that the best implementations involve stock levels being checked periodically and once again after a client adds items to a cart. If the item is out of stock, you can display an 'Out of Stock' notice, remove the item off your site or show additional lead times for delivery. SKU-specific stock levels can be checked for all items in the warehouse.
+
+# Some Definitions
++ __Inbounds__ are shipments which eventually arrive at Parcelninja. 
+
+  _Example: Inbound stock from a supplier or a customer returning a product._
++ __Outbounds__ are shipments which leave Parcelninja. 
+
+  _Example: Customer order or returning stock to a supplier._
++ __Inventory__ is a catalog of all your items that have been received at Parcelninja.
+
+# Group Inbounds
+In order for stock to be received at the warehouse, an __inbound__ needs to be created beforehand so that the warehouse becomes aware of the incoming shipment. The __inbound__ must contain a detailed list of items in the shipment. The __inbound__ can either be created through the Parcelninja website or through the Parcelninja API (detailed here).
+
+#### Inbound Status Codes
+- Awaiting Arrival (Code: 200)
+- Arrived at warehouse (Code: 201)
+- Being Processed (Code: 202)
+- Processing complete (Code: 203)
+- Processing complete with variance (Code: 204)
+
+## List of Inbounds [/inbounds/?orderTypeId&startDate&endDate&pageSize&page&search&startRange&col&colOrder]
+
+### Retrieve inbounds [GET]
+
+Returns a summary of inbounds in a given time period.
+
++ Parameters
+    + startDate (required, date, `20140101`) ... Filter data from. Format YYYYMMDD
+    + endDate (required, date, `20140701`) ... Filter data to. Format YYYYMMDD
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+    + orderTypeId (optional, number, `1`) ... Filter on type of order.   Lookup `id` via `/lookups/getOrderTypes`    
+    + search (optional, text, `Betco Supplier`) ... Search on multiple fields, eg: ItemNo, ItemName and Customer
+    + startRange (optional, number, `154365`) ... Min Order Number Filter, returns all orders above the value  
+    + col (optional, number, `0`) ... Sort field - 0 = Reference, 1 = Supplier, 2 = Estimated Arrival Date, 3 = Total Items, 4 = Date Created
+    + colOrder (optional, text, `asc`) ... Sort order - Either "asc" for ascending or "desc" for descending
+    + filter (optional, number, `1`) ... Filter field - 1 = Processing complete, 2 = Variance only, 3 = Awaiting Arrival, 4 = Being processed
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: ad3db217-f6c3-453c-b20e-aa4fa6502aea
+            x-parcelninja-total-items: 3547
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-pages: 356
+
+    + Body
+
+            {
+              "inbounds": [
+                 {
+                  "id": 1412818,
+                  "clientId": "IB-1111",
+                  "createDate": "20150107094613",
+                  "type": {
+                    "id": 1,
+                    "description": "Inbound stock"
+                  },
+                  "status": {
+                    "code": 203,
+                    "timeStamp": "20150107140400",
+                    "description": "Processing complete"
+                  },
+                  "deliveryInfo": {
+                    "customer": "Sennheiser",
+                    "dispatchDate": "20150107094613",
+                    "arrivalDate": "20150107140412",
+                    "estimatedArrivalDate": "20150107140412"
+                  },
+                  "numItems": 1
+                },
+                {
+                  "id": 1411806,
+                  "clientId": "IB-1107",
+                  "createDate": "20150102151549",
+                  "type": {
+                    "id": 1,
+                    "description": "Inbound stock"
+                  },
+                  "status": {
+                    "code": 203,
+                    "timeStamp": "20150106123900",
+                    "description": "Processing complete"
+                  },
+                  "deliveryInfo": {
+                    "customer": "Megarom",
+                    "dispatchDate": "20150102151549",
+                    "arrivalDate": "20150106123854",
+                    "estimatedArrivalDate": "20150106123854"
+                  },
+                  "numItems": 1
+                }
+              ]
+            }
+                   
+
+## Specific Inbound [/inbounds/{id}]
+
+### Find Inbounds by your own Inbound order number
+If you would like to find an inbound by your custom order number that you created it with, then you may include it as the value for the header `X-Client-Id`. This will override the regular `id`, which should still be passed an integer value, eg `0`.
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the Inbound to perform action with. In this case an `id` of 1 indicates an inbound
+
+### Retrieve an inbound [GET]
+
+Returns an inbound with minimal details.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: 078fef21-44a6-4cdf-a466-cf329839eabd
+
+    + Body
+        
+            {
+              "id": 1411806,
+              "clientId": "IB-1107",
+              "createDate": "20150102151549",
+              "type": {
+                "id": 1,
+                "description": "Inbound stock"
+              },
+              "status": {
+                "code": 203,
+                "timeStamp": "20150106123900",
+                "description": "Processing complete"
+              },
+              "deliveryInfo": {
+                "customer": "Megarom"
+              },
+              "items": [
+                {
+                  "itemNo": "ss64225",
+                  "name": "Steelseries 6GV2 Keyboard",
+                  "qty": 1,
+                  "dims": {
+                    "shippingWeightGrams": 2000
+                  },
+                  "costPrice": 1,
+                  "barcode": "495101333874514",
+                  "receivedQty": 1,
+                  "broken": 0,
+                  "returnReason": "Broken",
+                  "returnDetail": "Keys do not work",
+                  "unsellable": true
+                }
+              ],
+              "documents": [
+                {
+                  "id": 1,
+                  "name": "Inbound Manifest",
+                  "url": "https://storeapi.parcelninja.com/documents/d8a7bb1a-df76-4af2-a41f-afacb8300c71/241bc65e-2de2-3fac-b2c6-c14548fb2d6a/0",
+                  "dateAdded": "20150116112309"
+                }
+              ]
+            }
+            
+### Delete an inbound [DELETE]
+
+Deletes an inbound. 
+
+Please first check the Inbound with event history. If the latest Event code is greater than 200, it can not be cancelled.
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200
+    + Header
+
+            x-request-id: 992932b8-d679-42cf-a286-895c66d19e92
+
+## Inbound with event history [/inbounds/{id}/events]
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the Inbound Order to perform action with.
+    
+### Retrieve inbound with events [GET]
+
+Returns an inbound with full event history.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: a8b5c87b-c6f4-4de9-86ff-bf18c418fdbe
+
+    + Body
+        
+            {
+              "id": 1411806,
+              "clientId": "IB-1107",
+              "createDate": "20150102151549",
+              "type": {
+                "id": 1,
+                "description": "Inbound stock"
+              },
+              "status": {
+                "code": 203,
+                "timeStamp": "20150106123900",
+                "description": "Processing complete"
+              },
+              "events": [
+                {
+                  "code": 203,
+                  "timeStamp": "20150106123900",
+                  "description": "Processing complete"
+                },
+                {
+                  "code": 200,
+                  "timeStamp": "20150102151600",
+                  "description": "Awaiting arrival"
+                }
+              ],
+              "deliveryInfo": {
+                "customer": "Megarom"
+              },
+              "items": [
+                {
+                  "itemNo": "ss64225",
+                  "name": "Steelseries 6GV2 Keyboard",
+                  "qty": 1,
+                  "dims": {
+                    "shippingWeightGrams": 2000
+                  },
+                  "receivedSerialNumbers": [ 
+                            "SN100",
+                            "SN200"
+                  ],
+                  "receivedIMEINumbers": [ 
+                            "IMEI100",
+                            "IMEI200"
+                  ],
+                  "costPrice": 1,
+                  "barcode": "4932013874514",
+                  "receivedQty": 1,
+                  "broken": 0,
+                  "returnReason": "Broken",
+                  "returnDetail": "Keys do not work",
+                  "unsellable": true,
+                   "expiryDatesBatchNumbers": [
+                {
+                    "Quantity": 1,
+                    "Allocated": 0,
+                    "Unsellable": 0,
+                    "Available": 1,
+                    "ExpiryDate": "2024-07-31T00:00:00Z",
+                    "BatchNumber": "517282-05"
+                }
+            ],
+                }
+              ],
+              "documents": [
+                {
+                  "id": 7,
+                  "name": "Waybill",
+                  "url": "https://storeapi.parcelninja.com/documents/d8a7bb1a-df76-4af2-a41f-afacb8300c71/241bc65e-2de2-3fac-b2c6-c14548fb2d6a/0",
+                  "dateAdded": "20150116112309"
+                }
+              ]
+            }
+            
+## Create Inbound [/inbounds]
+When a new inbound is created, _the internal id_ is returned in the header as __x-parcelninja-inbound-id__. This is the id that should be used when making lookup requests.
+
+### A note on RMAs
+
+When an RMA (Return Merchandise Authorisation) is created by setting `typeId: 3`, you have the option to create a *reason* why. An example call may look like the following:
+
+    {
+      "clientId": "PO-32333337",
+      "typeId": 3,
+      "deliveryInfo": {
+        "customer": "TestCustomer",
+        "estimatedArrivalDate": 20150618
+      },
+      "items": [
+        {
+          "itemNo": "OOPROD1",
+          "name": "Kenwood Digital Amplifier",
+          "qty": 2,
+          "barcode": "5515",
+          "returnReason": "Broken",
+          "returnDetail": "Product was damaged upon arrival.",
+          "unsellable": true
+        }
+      ]
+    }
+    
+Note the `returnReason` and `returnDetail` fields. You may also specify if the item being returned is unsellable. Note the `unsellable` field.
+
+### Pickups and Supplier reference
+
+We have added the ability to request a pickup from a courier for an Inbound.
+
+When requesting a pickup, please make sure to add the additional information required outlined below when creating the Inbound.
+
+This information is "PickupInfo" and must be added to the JSON request.
+
+If you are not selecting to use a pickup for your Inbound, you may add a Supplier Reference to the Inbound which will allow us to more easily identify your delivery when it arrives at our Warehouse. This could be your Purchase Order number with your supplier or the waybill number your supplier received from their courier, anything that will help us identify your Inbound when it arrives at the Warehouse.
+
+For now, this is not a required field, but we definitely do recommend adding it.
+
+### Create Inbound Order [POST]
+#### Request Object
+
+#### `Inbound`
+
+| Field  | Description  | Type |  Req | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| clientId | Your unique order id or reference | string | Y | PO-0001 |
+| supplierReference | The reference you received from your supplier (Courier Waybill, Purchase Order Number) | string |  | PO-0001 |
+| typeId | 1: Inbound Stock, 3: RMA | numeric | Y | 1 |
+| deliveryInfo | See `deliveryInfo` | object | Y |  |
+| items | See `items` | list of objects[1..99] | Y |  |
+| pickupInfo | See `pickupInfo` | object |  |  |
+
+#### `deliveryInfo`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| customer | Customer's full name | string(50) | Y | John Doe |
+| estimatedArrivalDate | Estimated Arrival date for Inbound | date Format YYYYMMDD | Y | 20140731 |
+
+#### `pickupInfo`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| recipient | Customer's full name | string(50) | Y | My Supplier |
+| companyName | Company name | string(50) |  | Best Supplier |
+| contactNo | Customer's contact number | numeric | Y | 0123456789 |
+| email | Customer's email | string(50) |  | best@supplier.com |
+| addressLine1 | Address for pickup | string(50) | Y | 1 Sandton Drive |
+| addressLine2 | Additional address information | string(50) |  | Building 323 |
+| suburb | Suburb for address of pickup | string(50) | Y | Sandton |
+| postalCode | Postal code for address of pickup | numeric | Y | 2190 |
+| pickupDate | Date you would like the Inbound picked up by the courier | date Format YYYYMMDD | Y | 20140731 |
+| parcelCount | Number of parcels the courier is collecting | numeric | Y | 3 |
+| totalMassG | Total weight of the pickup in grams | numeric | Y | 1500 |
+
+#### `items`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| itemNo | Unique SKU | string(50) | Y | SKU-0001 |
+| clientId | Your unique id for the item<br>**If set, _qty_ must be 1** | string(255) |  | 123asd2132 |
+| name | Item name | string(255) | Y | Whatnot |
+| imageURL | URL of the item image | string(255) | | |
+| qty | Number per item | numeric | Y | 3 |
+| barcode | Barcode on the item | string(100) | Y | 231312313 |
+| costPrice | Cost price per item in Rands | numeric | | 35.50 |
+| captureSerial | Serial number of items recorded at packing | boolean | | |
+| captureExpiry | Expiry dates of items recorded at receiving | boolean | | |
+| returnReason | If RMA, the reason for the return | string | | Broken |
+| returnDetail | If RMA, the details for the return | string | | Seal on box was broken |
+| unsellable | If RMA, whether item is unsellable or not | boolean | | |
+
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+        
+            {
+                "clientId": "PO-456789",
+                "typeId": 1,
+                "deliveryInfo": {
+                "customer": "My Supp",
+                "estimatedArrivalDate": "20140731"
+                },
+                "items": 
+                [
+                    {
+                        "itemNo": "Prod1232",
+                        "name": "My Product1",
+                        "imageURL": "http://myimg.co.za/img1",
+                        "qty": 2,
+                        "costPrice": 12.5,
+                        "barcode": "1234567890",
+                        "captureSerial": false,
+                        "captureExpiry": false
+                    }
+                ]
+            }
+
++ Response 200 (application/json)
+    + Header
+            
+            x-parcelninja-inbound-id:123456
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+
+
+
+# Group Outbounds
+
+#### Outbound Status Codes
+- Awaiting stock (Code: 240)
+- In picking queue (Code: 290)
+- Ready to be picked (Code: 241)
+- In packing queue (Code: 291)
+- Ready to be packed (Code: 242)
+- Awaiting courier pickup (Code: 243)
+- Dispatched with courier (Code: 244)
+- Scheduled for delivery with courier (Code: 300)
+- Delivered (Code: 245)
+- Awaiting collection (Code: 246)
+- Collected (Code: 247)
+- Unable to deliver (Code: 280)
+- Order on hold (Code: 282)
+- Unsuccessful (Code: 390)
+## List of Outbounds [/outbounds/?orderTypeId&startDate&endDate&pageSize&page&search&startRange&col&colOrder]
+
+### Retrieve outbounds [GET]
+
+Returns a summary of outbounds.
+
++ Parameters
+    + orderTypeId (optional, number, `2`) ... Filter on type of order.   Lookup `id` via `/lookups/getOrderTypes`
+    + startDate (required, date, `20140101`) ... Filter data from. Format YYYYMMDD
+    + endDate (required, date, `20140701`) ... Filter data to. Format YYYYMMDD
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+    + search (optional, text, `Mr Smith`) ... Search on multiple fields, eg: ItemNo, ItemName and Customer
+    + startRange (optional, number, `154365`) ... Min Order Number Filter, returns all orders above the value  
+    + col (optional, number, `0`) ... Sort field - 0 = Reference, 1 = Customer, 2 = Dispatch Date, 3 = Total Items, 4 = Date Created
+    + colOrder (optional, text, `asc`) ... Sort order - Either "asc" for ascending or "desc" for descending
+    + filter (optional, number, `1`) ... Filter field - 1 = Delivered/Collect, 2 = Processing, 3 = Awaiting Stock, 4 = En route with courier
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-parcelninja-elapsed-ms: 12
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            x-parcelninja-total-pages: 120
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-items: 1200
+
+    + Body
+
+            {
+              "outbounds": [
+                {
+                  "id": 1436139,
+                  "clientId": "OB001",
+                  "createDate": "20150218155418",
+                  "type": {
+                    "id": 2,
+                    "description": "Outbound order"
+                  },
+                  "status": {
+                    "code": 245,
+                    "timeStamp": "20150220064800",
+                    "description": "Delivered"
+                  },
+                  "deliveryInfo": {
+                    "customer": "Jane Doe",
+                    "dispatchDate": "20150218161603",
+                    "arrivalDate": "20080115000000",
+                    "estimatedArrivalDate": "20080115000000",
+                    "totes":  [ "TOTE10930", "TOTE20930" ]
+                  },
+                  "numItems": 1
+                },
+                {
+                  "id": 1412820, 
+                  "clientId": "OB002",
+                  "createDate": "20150107094857",
+                  "type": {
+                    "id": 2,
+                    "description": "Outbound order"
+                  },
+                  "status": {
+                    "code": 245,
+                    "timeStamp": "20150108125200",
+                    "description": "Delivered"
+                  },
+                  "deliveryInfo": {
+                    "customer": "John Doe",
+                    "dispatchDate": "20150107142627",
+                    "arrivalDate": "20080115000000",
+                    "estimatedArrivalDate": "20080115000000",
+                    "totes":  [ "TOTE10930" ]
+                  },
+                  "numItems": 1
+                }
+              ]
+            }
+
+## List of Outbounds Requiring Stock [/outbounds/requiredOutbounds]
+
+### Retrieve outbounds requiring stock [GET]
+
+Returns a summary of outbounds that require stock and have no related Inbounds.
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-parcelninja-elapsed-ms: 12
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+
+            {
+              "outbounds": [
+                {
+                  "id": 1436139, 
+                  "clientId": "OB001",
+                  "createDate": "20150218155418",
+                  "type": {
+                    "id": 2,
+                    "description": "Outbound order"
+                  },
+                  "status": {
+                    "code": 245,
+                    "timeStamp": "20150220064800",
+                    "description": "Delivered"
+                  },
+                  "deliveryInfo": {
+                    "customer": "Jane Doe",
+                    "dispatchDate": "20150218161603",
+                    "arrivalDate": "20080115000000",
+                    "estimatedArrivalDate": "20080115000000"
+                  },
+                  "numItems": 1
+                },
+                {
+                  "id": 1412820, 
+                  "clientId": "OB002",
+                  "createDate": "20150107094857",
+                  "type": {
+                    "id": 2,
+                    "description": "Outbound order"
+                  },
+                  "status": {
+                    "code": 245,
+                    "timeStamp": "20150108125200",
+                    "description": "Delivered"
+                  },
+                  "deliveryInfo": {
+                    "customer": "John Doe",
+                    "dispatchDate": "20150107142627",
+                    "arrivalDate": "20080115000000",
+                    "estimatedArrivalDate": "20080115000000",
+                    "totes":  [ "TOTE10930", "TOTE20930" ]
+                  },
+                  "numItems": 1
+                }
+              ]
+            }
+
+## Specific Outbound [/outbounds/{id}]
+
+### Find Outbounds by your own Outbound order number
+If you would like to find an outbound by your custom order number that you created it with, then you may include it as the value for the header `X-Client-Id`. This will override the regular `id`, which should still be passed an integer value, eg `0`.
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the outbound to perform action with.
+
+### Retrieve an outbound [GET]
+
+Returns a specific outbound with minimal data.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+                "id": 1343229,
+                "clientId": "1343229",
+                "createDate": "20140708090313",
+                "type": 
+                {
+                    "id": 2,
+                    "description": "Outbound Order"
+                },
+                "status": {
+                "code": 244,
+                "timeStamp": "20140716084900",
+                "description": "Dispatched with courier"
+                },
+                "deliveryInfo": 
+                {
+                    "customer": "My Customer",
+                    "contactNo": "1234567890",
+                    "addressLine1": "2nd Floor A Building",
+                    "addressLine2": "184 A street",
+                    "suburb": "Bryanston",
+                    "postalCode": "2196",
+                    "dispatchDate": "20140716084838",
+                    "trackingNo": "LA0027443313",
+                    "trackingUrl": "http://parcelninja.co.za/tracking/?WaybillNo=LA0027443313",
+                    "courierName": "Fastway",
+                    "totes":  [ "TOTE10930", "TOTE20930" ],
+                    "courierBillingInfo": {
+                            "service": {
+                              "code": "SD",
+                              "description": "Same business day delivery",
+                              "workingDays": 2
+                            },
+                            "shippingWeight": 6854,
+                            "boxList": [
+                            {
+                                  "name": "TVL4-Half",
+                                  "weight": 6290,
+                                    "quantity": 1
+                            }],
+                            "dispatchDate": "2015/08/11 06:00:00",
+                            "deliveryStartDate": "2015/08/12 08:00:00",
+                            "deliveryEndDate": "2015/08/14 05:00:00",
+                            "cost": 35.86
+                    },
+                    "status": 
+                    {
+                        "code": 300,
+                        "timeStamp": "20140717071723",
+                        "description": "Onboard - the parcel is onboard the Courier vehicle."
+                    }
+                },
+                "items": 
+                [
+                    {
+                    "id": 952342,
+                    "itemNo": "100PCDK01",
+                    "name": "Prod 1",
+                    "qty": 1,
+                    "SerialNumbers": [ "SN29843872" ],
+                    "status": 
+                        {
+                            "code": 144,
+                            "timeStamp": "20140708090300",
+                            "description": "Stock Allocated"
+                        }
+                    },
+                    {
+                    "id": 952343,
+                    "itemNo": "100PCDK01",
+                    "name": "Prod 1",
+                    "qty": 1,
+                    "SerialNumbers": [ "SN29843871", "SN29843873" ],
+                    "status": 
+                        {
+                            "code": 144,
+                            "timeStamp": "20140708090300",
+                            "description": "Stock Allocated"
+                        }
+                    },
+                    { 
+                    "id": 952344,
+                    "itemNo": "5PCMG4F1",
+                    "name": "Prod 2",
+                    "qty": 1,
+                    "status": 
+                        {
+                            "code": 144,
+                            "timeStamp": "20140708090300",
+                            "description": "Stock Allocated"
+                        }
+                    }
+                ]
+            }
+
+### Delete an outbound [DELETE]
+
+Deletes an outbound.
+
+Please first check the Outbound with event history. If the Event code list contains a 241 status code, it can not be cancelled.
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            
+## Prioritise Outbound [/outbounds/prioritise/{id}]            
+            
+### Priortise an outbound [POST]
+
+Prioritises an outbound.
+
+Please first check the Outbound with event history. If the Event code list contains a 241 status code, it can not be prioritised.
+
+__Please note extra charges apply when prioritising an Outbound.__
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85            
+
+## Specific Outbound with event history [/outbounds/{id}/events]
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the outbound to perform action with.
+    
+### Retrieve an outbound with event history [GET]
+
+Returns an outbound with event history.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+              "id": 141233320,
+              "clientId": "OB002",
+              "createDate": "20150107094857",
+              "type": {
+                "id": 2,
+                "description": "Customer Order"
+              },
+              "status": {
+                "code": 245,
+                "timeStamp": "20150108125200",
+                "description": "Delivered"
+              },
+              "events": [
+                {
+                  "code": 245,
+                  "timeStamp": "20150108125200",
+                  "description": "Delivered"
+                },
+                {
+                  "code": 244,
+                  "timeStamp": "20150107142600",
+                  "description": "Dispatched with courier"
+                },
+                {
+                  "code": 243,
+                  "timeStamp": "20150107142600",
+                  "description": "Awaiting courier pickup"
+                },
+                {
+                  "code": 241,
+                  "timeStamp": "20150107140400",
+                  "description": "Ready to be picked"
+                },
+                {
+                  "code": 240,
+                  "timeStamp": "20150107094900",
+                  "description": "Awaiting stock"
+                }
+              ],
+              "deliveryInfo": {
+                "customer": "Jane Doe",
+                "contactNo": "0829991111",
+                "email": "janedoe@gmail.com",
+                "addressLine1": "Unit 408, Hillside Heights",
+                "addressLine2": "1 Wessels Road",
+                "suburb": "Greenpoint, Western Cape",
+                "postalCode": "8001",
+                "deliveryOption": {
+                  "deliveryQuoteId": "0",
+                  "priceExVAT": 63.99
+                },
+                "dispatchDate": "20150107142627",
+                "trackingNo": "WAY141328234440",
+                "trackingUrl": "https://store.parcelninja.com/tracking.aspx?WaybillNo=PNJ60043630",
+                "courierName": "BEX Couriers",
+                "totes":  [ "TOTE10930", "TOTE20930" ],
+                "courierBillingInfo": {
+                            "service": {
+                              "code": "SD",
+                              "description": "Same business day delivery",
+                              "workingDays": 1
+                            },
+                            "shippingWeight": 6854,
+                            "boxList": [
+                            {
+                                  "name": "TVL4-Half",
+                                  "weight": 6290,
+                                  "quantity": 1
+                            }],
+                            "dispatchDate": "2015/08/11 06:00:00",
+                            "deliveryStartDate": "2015/08/12 08:00:00",
+                            "deliveryEndDate": "2015/08/14 05:00:00",
+                            "cost": 35.86
+                }
+              },
+              "items": [
+                {
+                  "id": 1478515,
+                  "itemNo": "B00GWU8FAE",
+                  "name": "Sennheiser G4ME Zero White",
+                  "qty": 1,
+                  "SerialNumbers": [ "SN29843871", "SN29843873" ],
+                  "dims": {
+                    "shippingWeightGrams": 1000
+                  },
+                  "costPrice": 2990,
+                  "status": {
+                    "code": 144,
+                    "timeStamp": "20150107140400",
+                    "description": "Stock Allocated"
+                  },
+                   "expiryDatesBatchNumbers": [
+                {
+                    "Quantity": 1,
+                    "Allocated": 0,
+                    "Unsellable": 0,
+                    "Available": 99,
+                    "ExpiryDate": "2024-07-31T00:00:00Z",
+                    "BatchNumber": "517282-05"
+                }
+            ],
+                }
+              ],
+              "documents": [
+                {
+                  "type": 2,
+                  "name": "name.pdf",
+                  "url": "http://www.yourServer.com/samples/pdf.pdf",
+                  "printCount": 1,
+                  "printPlacement": 0
+                }
+              ],
+              "totalPackedWeight": 20654
+            }
+
+## Create Outbound [/outbounds]
+When a new outbound is created, _the internal id_ is returned in the header as __x-parcelninja-outbound-id__. This is the id that should be used when making lookup requests.
+
+
+<b>Limits</b>
+* The total number of items per Outbound may not exceed 500 in quantity
+* The total number of unique SKU's per Outbound may not exceed 50
+
+<b>Pargo</b>
+
+For orders going with Pargo, you will need to add the following to the field companyName: "-pup2300"
+
+Eg. "companyName" : "THE COMPUTER SHOP -  ST FRANCIS-pup4942"
+
+### Create outbound [POST]
+#### Request Object
+
+#### `Outbounds`
+
+| Field  | Description  | Type |  Required | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| clientId | Your unique order id or reference | string | Y | CO-0001 |
+| typeId | 2: Customer Outbound Order, 4: Return Stock Order (RSO) | numeric | Y | 2 |
+| deliveryInfo | See `deliveryInfo` | object | Y |  |
+| items | See `items` | list of objects[1..99] | Y |  |
+| channelId | Indicate the outgoing channel (if any) | string |  | Channel1 |
+| documents | Documents for printing | list of objects[1..99] | | |
+
+#### `deliveryInfo`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| customer | Customer's full name | string(30) | Y | John Doe |
+| companyName | Company name | string(20) |  | Parcelninja |
+| email | Customer's email address | string(100) |  | john<nolink>@email.co.za |
+| contactNo | Customer's _valid_ contact phone number | string(10) | Y | 0111234567 |
+| addressLine1 | Address Line 1 | string(50) | Y | 10 Church Road |
+| addressLine2 | Address Line 2 | string(50) |  |  |
+| suburb | Suburb | string(50) | Y | Bryanston |
+| postalCode | Postal Code | string(4) | Y | 2196 |
+| deliveryOption | see `deliveryOption` | object | Y |  |`
+| forCollection | Order to be collected at Warehouse. If `deliveryQuoteId = 1` this will always be `true`. If this value is set to `true` but deliveryQuoteId isn't 1, this value will override deliveryQuoteId and the Outbound will be marked for collection | boolean |  | |
+
+#### `deliveryOption`
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| deliveryQuoteId | Delivery Quote Id from `/api/v1/deliveryquote/`, 0 to use cheapest delivery option or 1 to force collection option | numeric | Y | 5 |
+| SpecialServiceCode | With `deliveryQuoteId`=0, set this to 1 for Fastest or blank or 0 for Cheapest | numeric | | 1 |
+
+#### `Items`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| itemNo | Unique SKU | string(50) | Y | SKU-0001 |
+| name | Item name | string(255) |  | Red Widget |
+| qty | Number per item | numeric | Y | 3 |
+| fromReserve | If `true` then allocate item from reserved stock | boolean |  | Default: false |
+| captureSerial | Capture item serial number at packing | boolean |  | Default: false |
+
+#### `Documents`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| type | Type of document 0: unknown 1: Invoice 2: Notice 3: Packing slip | numeric | Y | 0 |
+| name | Document name | string(255) | Y | name.pdf |
+| url | Url to download document from | string(255) | Y if "data" is null or empty | http://www.yourServer.com/samples/pdf.pdf |
+| printCount | Number of prints required | numeric | Y | 1 |
+| printPlacement | How to place printed documents in/on the box 0: Inside & outside 1: Inside only 2: Outside only | numeric | Y |  |
+| data | Document data | string(20000) | Y if "url" is null or empty |  UTF-8 Base64 Encoded String of the Byte Array of the Document  |
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+                
+            {
+              "clientId": "CO-00001",
+              "typeId": 2,
+              "deliveryInfo": {
+                "customer": "John Doe",
+                "companyName" : "Parcelninja",
+                "contactNo": "0123216540",
+                "addressLine1": "Afrox building",
+                "addressLine2": "56 Marlboro",
+                "suburb": "Melrose Arch",
+                "postalCode": "2196",
+                "deliveryOption": {
+                  "deliveryQuoteId": 0
+                },
+                "forCollection": true
+              },
+              "items": [
+                {
+                  "itemNo": "SKU-001",
+                  "qty": 3
+                }
+              ]
+            }
+
++ Response 204 (application/json)
+    + Header
+            
+            x-originator: Store.Api.2.41.8.0
+            x-parcelninja-outbound-id: 6099999
+            x-request-id: e06490f4-56b4-42e9-a801-601cd0ab4e41
+
+## Add Document to Outbound [/outbounds/addOutboundDocument]
+
+You are able to add/update a document that requires printing after an Outbound is created, as long as the status has not progressed to Ready to be packed (Code: 242) or further.
+
+### Add Document to outbound [POST]
+#### Request Object
+
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| reference | Outbound Reference | string | Y | Outbound001 |
+| type | Type of document 0: unknown 1: Invoice 2: Notice 3: Packing slip | numeric | Y | 0 |
+| name | Document name | string(255) | Y | name.pdf |
+| url | Url to download document from | string(255) | Y if "data" is null or empty | http://www.yourServer.com/samples/pdf.pdf |
+| printCount | Number of prints required | numeric | Y | 1 |
+| printPlacement | How to place printed documents in/on the box 0: Inside & outside 1: Inside only 2: Outside only | numeric | Y |  |
+| data | Document data | string(20000) | Y if "url" is null or empty |  UTF-8 Base64 Encoded String of the Byte Array of the Document  |
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+                
+            {
+              "reference": "Outbound001",
+              "type": 1,
+              "name": "Invoice.pdf",
+              "data": "base64EncodedString",
+              "printCount": 1,
+              "printPlacement": 0
+            }
+
++ Response 200 (application/json)
+    + Header
+            
+            x-originator: Store.Api.2.41.8.0
+            x-request-id: e06490f4-56b4-42e9-a801-601cd0ab4e41
+
+# Group Inventory
+
+Items inside the Warehouse will be described by the following words. Inventory in a specific state have a specific meaning. The meanings are as follows:
+
+
+`instock` = Items are in the warehouse, have not been assigned to any orders and are available to be assigned.
+
+`allocated` = Items have been allocated to an Outbound order but have not yet been packed. 
+
+`unallocated` = Outbound orders have been created for these items and there are none available or en route to the warehouse.
+
+`onReorder` = Items en route to the warehouse.
+
+`broken` = Items are broken and unsellable, can be returned to supplier.
+
+`reserved` = Items in the reserved pool.
+
+## List of Inventory [/inventory/?pageSize&page&search]
+
+### Retrieve full inventory [GET]
+
++ Parameters
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+    + search (optional, text, `JN148S`) ... Search on multiple fields, eg: ItemNo and ItemName
+    + col (optional, number, `1`) ... Sort field - 1 = SKU, 2 = Description, 3 = In Stock, 4 = Allocated, 5 = Required, 6 = En Route, 7 = Broken, 10 = Modified Date
+    + colOrder (optional, text, `asc`) ... Sort order - Either "asc" for ascending or "desc" for descending
+    + filter (optional, number, `1`) ... Filter field - 1 = In Stock, 2 = Reserved, 3 = Broken, 4 = En Route, 5 = Required
+    + modifiedDate (optional, date, `2014-07-01`) ... Filter Field - When a product was last modified (any change in stock values)
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            x-parcelninja-total-pages: 18
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-items: 180
+
+    + Body
+    
+            {
+                "items": 
+                [
+                    {
+                        "itemNo": "CAST5GRABO",
+                        "name": "My Product 1",
+                        "Dims": 
+                        {
+                            "length": 360,
+                            "width": 210,
+                            "height": 50,
+                            "weight": 592
+                        },
+                        "instock": 0,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 0,
+                        "broken": 1,
+                        "reserved": 0,
+                        "barcodes": [
+                            "Barcode1",
+                            "Barcode2"
+                        ],
+                        "lastModifiedDate": "2023-12-11T09:15:57.052Z",
+                        "lastSoldDate": "2023-12-10T17:53:06.585Z",
+                        "lastReceivedDate": "2023-09-07T11:08:04.526Z",
+                    },
+                    {
+                        "itemNo": "CAST5GRABR",
+                        "name": "My Product 2",
+                        "Dims": 
+                        {
+                            "length": 360,
+                            "width": 210,
+                            "height": 50,
+                            "weight": 592
+                        },
+                        "instock": 1,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 0,
+                        "broken": 0,
+                        "reserved": 0,
+                        "lastReceivedBarcode": "Barcode3",
+                        "barcodes":[
+                            "Barcode3"
+                        ],
+                        "lastModifiedDate": "2023-12-11T09:15:57.052Z",
+                        "lastSoldDate": "2023-12-10T17:53:06.585Z",
+                        "lastReceivedDate": "2023-09-07T11:08:04.526Z",
+                    },
+                    {
+                        "itemNo": "CT8H5L1",
+                        "name": "My Product 3",
+                        "Dims": 
+                        {
+                            "length": 360,
+                            "width": 210,
+                            "height": 50,
+                            "weight": 592
+                        },
+                        "instock": 6,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 2,
+                        "broken": 0,
+                        "reserved": 0,
+                        "lastReceivedBarcode": "Barcode4",
+                        "barcodes":[
+                            "Barcode4"
+                        ],
+                        "lastModifiedDate": "2023-12-11T09:15:57.052Z",
+                        "lastSoldDate": "2023-12-10T17:53:06.585Z",
+                        "lastReceivedDate": "2023-09-07T11:08:04.526Z",
+                    }
+                ]
+            }
+
+
+## Subset of Inventory [/inventory/subset?pageSize&page]
+
+This endpoint allows you to retrieve information about a supplied list of SKUs. You can paginate, sort and filter these SKUs for easier view display.
+
+### Retrieve a subset of inventory [POST]
+
+#### `subset`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| sortField | 0: none, 1: itemNo, 2: itemName, 3: inStock, 4: allocated, 5: unallocated, 6: onReorder, 7: broken, 8: reserved, 9: costPrice | int |  | 0 |
+| sortDirection | The direction to sort by | string(4) | | "asc" by Default |
+| fieldFilter | The field to filter by: 0: none, 1: instock, 2: allocated, 3: unallocated, 4: onReorder, 5: broken, 6: reserved | int |  | 0 |
+| skuList | A list of SKUs to search for | List(`sku`) | Y | `[ { "itemNo": "123"}, ... ]` |
+
++ Parameters
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+            
+            {
+                "sortField": 1,          // (0: none, 1: itemNo, 2: itemName, 3: inStock, 4: allocated, 5: unallocated, 6: onReorder, 7: broken, 8: reserved, 9: costPrice)
+                "sortDirection": "desc", // "asc" is selected by default.
+                "fieldFilter": 1,        // (0: none, 1: instock, 2: allocated, 3: unallocated, 4: onReorder, 5: broken, 6: reserved)
+                "skuList":[
+                    { "itemNo": "B973-1213-D725" },
+                    { "itemNo": "6A3C-8BD7-D216" },
+                    { "itemNo": "D67D-E70B-3C0A" }
+                ]
+            }
+            
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: a372b0d4-c5cd-4524-becf-e56f4592d7a1
+            x-parcelninja-total-pages: 18
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-items: 180
+
+    + Body
+    
+            {
+                "items": 
+                [
+                    {
+                        "itemNo": "CAST5GRABO",
+                        "name": "My Product 1",
+                        "dims": 
+                        {
+                            "length": 200,
+                            "width": 150,
+                            "height": 20,
+                            "weight": 92
+                        },
+                        "instock": 0,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 0,
+                        "broken": 1,
+                        "reserved": 0,
+                        "barcodes": [
+                            "Barcode1",
+                            "Barcode2"
+                        ]
+                    },
+                    {
+                        "itemNo": "CAST5GRABR",
+                        "name": "My Product 2",
+                        "dims": 
+                        {
+                            "length": 200,
+                            "width": 150,
+                            "height": 20,
+                            "weight": 92
+                        },
+                        "instock": 1,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 0,
+                        "broken": 0,
+                        "reserved": 0,
+                        "barcodes":[
+                            "Barcode3"
+                        ]
+                    },
+                    {
+                        "itemNo": "CT8H5L1",
+                        "name": "My Product 3",
+                        "dims": 
+                        {
+                            "length": 200,
+                            "width": 150,
+                            "height": 20,
+                            "weight": 92
+                        },
+                        "instock": 6,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 2,
+                        "broken": 0,
+                        "reserved": 0,
+                        "barcodes":[
+                            "Barcode4"
+                        ]
+                    }
+                ]
+            }
+
+
+## Specific SKU [/inventory/{sku}]
+
++ Parameters
+    + sku (required, string,  `CAST5GRABO`) ... `sku` of the product to perform action with.
+
+### Retrieve a single SKU [GET]
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: a8b5c87b-c6f4-4de9-86ff-bf18c418fdbe
+
+    + Body
+    
+            {
+                "items": 
+                [
+                    {
+                        "itemNo": "CAST5GRABO",
+                        "name": "My Product 1",
+                        "dims": 
+                        {
+                            "length": 200,
+                            "width": 150,
+                            "height": 20,
+                            "weight": 92
+                        },
+                        "instock": 0,
+                        "allocated": 0,
+                        "unallocated": 0,
+                        "onReorder": 0,
+                        "broken": 1,
+                        "reserved": 0,
+                        "barcodes": [
+                            "Barcode65"
+                        ],
+                        "expiryDatesBatchNumbers": [
+                            {
+                                 "quantity": 47,
+                                 "expiryDate": "2025-02-06 00:00:00.000",
+                                 "batchNumber": "5296-PO6/02/2023"
+                            }
+                        ],
+                    }
+                ]
+            }            
+
+## Reserve Inventory [/inventory/reserve]
+
+### Reserve inventory [POST]
+#### Request Object
+
+#### `reserve inventory`
+
+| Field  | Description  | Type |  Req | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| itemNo | Item Number (SKU) for the product to reserve | string | Y | MN569955 |
+| qty | The amount of stock to reserve | numeric | Y | 5  |
+| action | The action to perform </br> `1`: Add</br> `2`: Remove | numeric | Y | 1 |
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+        
+            {
+             "itemNo":"SS63008",
+             "qty":1,
+             "action":1
+            }
+
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+           "1 item(s) from Inventory unreserved successfully."
+            
++ Response 400 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85 
+            
+    + Body
+        
+           "Unable to reserve inventory. Is there enough stock?"
+            
+            
+## Virtual SKUS [/inventory/virtual?pageSize&page&search]
+
+Virtual SKUS are used to define two or more products that you want us to pick and pack at the time of shipment. Virtual SKUS are not pre-packaged items.
+
+This may be necessary in some of the following scenarios:
+- Promotional bundles such as gift baskets made up of more than one item that are not delivered pre-assembled to a warehouse.
+- Products you sell which are not stocked as a single pickable item (i.e. kits or cases of the same item), but are instead composed of several items that need to be picked.
+
+<b>Please note that Virtual SKUS require a minimum of two SKUS in its product list when created or updated.</b>
+
+<b>Please also note that you may not create a Virtual SKU with a virtualSku of an existing inventory SKU.</b>
+
+### List Virtual SKUS [GET]
+
++ Parameters
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+    + search (optional, text, `JN148S`) ... Search on multiple fields, eg: virtualSku and description
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            x-parcelninja-total-pages: 18
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-items: 180
+
+    + Body
+    
+            [
+    {
+        "virtualSku": "TEST",
+        "description": "test",
+        "available": 0,
+        "productList": [
+            {
+                "sku": "JN1763",
+                "description": "Co-Enzyme Q10 - 30 Capsules",
+                "quantity": 2
+            },
+            {
+                "sku": "JN1765",
+                "description": "Evening Primrose Oil",
+                "quantity": 1
+            },
+            {
+                "sku": "JN1770",
+                "description": "Joint Support",
+                "quantity": 2
+            }
+        ]
+    },
+    {
+        "virtualSku": "WER",
+        "description": "wer",
+        "available": 0,
+        "productList": [
+            {
+                "sku": "JN1773",
+                "description": "Multivitamin",
+                "quantity": 3
+            },
+            {
+                "sku": "JN1765",
+                "description": "Evening Primrose Oil",
+                "quantity": 2
+            }
+        ]
+    }]
+    
+    
+## Create Virtual SKU [/inventory/virtual]
+
+### Create Virtual SKU [POST]
+#### Request Object
+
+#### `Virtual Sku`
+
+| Field  | Description  | Type |  Required | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| virtualSku | Your unique Virtual SKU, must not exist in Inventory | string | Y | BEDSANDBLANKETS |
+| description | Description of your Virtual SKU | string | Y | Beds and Blankets |
+| productList | See `Product List` | list of objects[1..99] | Y | |
+
+#### `Product List`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| sku | SKU | string | Y | FANCYBED |
+| description | Description of SKU | string | Y | A really fancy bed |
+| quantity | Number of units | int | Y | 1 |
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+            
+            
+    + Body
+                
+            {
+              "virtualSku": "BEDSBANDBLANKETS",
+              "description": "A bed and a couple of blankets",
+              "productList": [
+                {
+                  "sku": "FANCYBED",
+                  "description": "A really fancy bed",
+                  "quantity": 1
+                },
+                {
+                  "sku": "FEATHERDUVET",
+                  "description": "A duvet made of feathers",
+                  "quantity": 2
+                },
+              ]
+            }
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            
+## Get Specific Virtual SKU [/inventory/virtual/{virtualSkuToGet}]
+            
+### Get Specific Virtual SKU [GET]
+
++ Parameters
+    + virtualSkuToGet (required, string, `BEDSANDBLANKETS`) ... The Virtual SKU to get.
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+            
+            
+    + Body
+                
+            
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85   
+
+    + Body
+    
+        {
+              "virtualSku": "BEDSBANDBLANKETS",
+              "description": "A bed and a couple of blankets",
+              "productList": [
+                {
+                  "sku": "FANCYBED",
+                  "description": "A really fancy bed",
+                  "qty": 1
+                },
+                {
+                  "sku": "WOOLBLANKET",
+                  "description": "A blanket made of wool",
+                  "qty": 2
+                },
+              ]
+         }
+
+
+## Update Virtual SKU [/inventory/virtual/{virtualSkuToUpdate}]
+            
+### Update Virtual SKU [PUT]
+
++ Parameters
+    + virtualSkuToUpdate (required, string, `BEDSANDBLANKETS`) ... The Virtual SKU to be updated.
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+            
+            
+    + Body
+                
+            {
+              "virtualSku": "BEDSBANDBLANKETS",
+              "description": "A bed and a couple of blankets",
+              "productList": [
+                {
+                  "sku": "FANCYBED",
+                  "description": "A really fancy bed",
+                  "qty": 1
+                },
+                {
+                  "sku": "WOOLBLANKET",
+                  "description": "A blanket made of wool",
+                  "qty": 2
+                },
+              ]
+            }
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85          
+            
+## Delete Virtual SKU [/inventory/virtual/{virtualSkuToDelete}]
+            
+### DELETE Virtual SKU [DELETE]
+
++ Parameters
+    + virtualSkuToDelete (required, string, `BEDSANDBLANKETS`) ... The Virtual SKU to be deleted.
+
++ Request (application/json)
+    
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85   
+            
+# Group Managed Pickups
+Managed Pickups is a new system we've developed to allow you to schedule a pickup with a courier that does not go to Parcelninja. These pickups are managed by Parcelninja and you can get tracking and events for the pickup, such as when it is collected and delivered.
+This is very useful for bypassing our warehouse and sending items directly back to the supplier for repairs.
+
+Please note: This feature is not available by default. You must request access to this feature.
+
+#### Managed Pickup Status Codes
+- Created (Code: 0)
+- Submitted (Code: 1)
+- Collected (Code: 3)
+- Delivered (Code: 5)
+
+## List of Managed Pickups [/pickups/?startDate&endDate&pageSize&page&search&col&colOrder]
+
+### Retrieve managed pickups [GET]
+
+Returns a summary of managed pickups.
+
++ Parameters
+    + startDate (required, date, `20140101`) ... Filter data from. Format YYYYMMDD
+    + endDate (required, date, `20140701`) ... Filter data to. Format YYYYMMDD
+    + pageSize (required, number, `15`) ... The number of records per page to return
+    + page (required, number, `1`) ... The page number to return
+    + search (optional, text, `Mr Smith`) ... Search on multiple fields, eg: Reference
+    + col (optional, number, `0`) ... Sort field - 0 = Reference, 1 = Customer, 2 = Pickup Date, 3 = Total Parcels, 4 = Date Created
+    + colOrder (optional, text, `asc`) ... Sort order - Either "asc" for ascending or "desc" for descending
+    + filter (optional, number, `1`) ... 0 Created, 1 Submitted, 3 Collected, 5 Delivered
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200 (application/json)
+
+    + Header
+
+            x-parcelninja-elapsed-ms: 12
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+            x-parcelninja-total-pages: 120
+            x-parcelninja-items-per-page: 10
+            x-parcelninja-total-items: 1200
+
+    + Body
+
+            {
+              "pickups": [
+                {
+                     "id": 58,
+                     "reference": "Eg1",
+                     "pickupDate": "20181113000000",
+                     "estimatedDeliveryDate": "20181116110000",
+                     "waybillNo": "1303199203",
+                     "dateCreated": "20181108123730",
+                     "status": {
+                            "code": 0,
+                            "description": "Created",
+                            "timeStamp": "20181108123730"
+                     }
+                },
+                {
+                     "id": 22,
+                     "reference": "Eg2",
+                     "pickupDate": "20181113000000",
+                     "estimatedDeliveryDate": "20181116110000",
+                     "waybillNo": "1303199205",
+                     "dateCreated": "20181108123730",
+                     "status": {
+                            "code": 5,
+                            "description": "Delivered",
+                            "timeStamp": "20181108123730"
+                     }
+                }
+              ]
+            }
+
+## Specific Managed Pickup [/pickups/{id}]
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the managed pickup to perform action with.
+
+### Retrieve a managed pickup [GET]
+
+Returns a specific managed pickup.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+  "id": 978,
+  "reference": "ManagedPickup",
+  "pickupDate": "20181113000000",
+  "estimatedDeliveryDate": "20181116110000",
+  "dateCreated": "20181108123730",
+  "source": {
+    "contactName": "dan",
+    "businessName": "",
+    "addressLine1": "Some Road",
+    "addressLine2": "",
+    "townCity": "",
+    "suburb": "Sandton",
+    "postCode": "2196",
+    "phone": "0834894989"
+  },
+  "destination": {
+    "contactName": "PN",
+    "businessName": "",
+    "addressLine1": "Another road",
+    "addressLine2": "",
+    "townCity": "",
+    "suburb": "Linbro Park",
+    "postCode": "2090",
+    "phone": "0834894989"
+  },
+  "status": {
+    "code": 0,
+    "description": "Created",
+    "timeStamp": "20181108123730"
+  }
+}
+            
+### Delete a managed pickup [DELETE]
+
+Deletes a managed pickup.
+
+Please note that you can only cancel the pickup until the day of the pickup.
+
++ Request (application/json)
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
++ Response 200
+    + Header
+
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+## Specific Managed Pickup with event history [/pickups/{id}/events]
+
++ Parameters
+    + id (required, number,  `1`) ... `id` of the managed pickup to perform action with.
+    
+### Retrieve a managed pickup with event history [GET]
+
+Returns a managed pickup with event history.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+  "id": 978,
+  "reference": "DanielTest",
+  "pickupDate": "20181113000000",
+  "estimatedDeliveryDate": "20181116110000",
+  "waybillNo": "1303199203",
+  "dateCreated": "20181108123730",
+  "source": {
+    "contactName": "dan",
+    "businessName": "",
+    "addressLine1": "4 huntingdon road",
+    "addressLine2": "",
+    "townCity": "",
+    "suburb": "Sandton",
+    "postCode": "2196",
+    "phone": "0835567611"
+  },
+  "destination": {
+    "contactName": "PN",
+    "businessName": "",
+    "addressLine1": "49 galaxy avenue",
+    "addressLine2": "",
+    "townCity": "",
+    "suburb": "Linbro Park",
+    "postCode": "2090",
+    "phone": "0835567611"
+  },
+  "status": {
+    "code": 0,
+    "description": "Created",
+    "timeStamp": "20181108123730"
+  },
+  "events": [
+    {
+      "code": 0,
+      "description": "Created",
+      "timeStamp": "2018110812370"
+    }
+  ]
+}
+
+## Create Managed Pickup [/pickups]
+When a new managed pickup is created, _the pickup id_ is returned in the header as __x-parcelninja-pickup-id__. This is the id that should be used when making lookup requests.
+
+
+<b>Limits</b>
+* If the courier does not deliver to your destination address, you will not be able to create the pickup.
+
+### Create Managed Pickup [POST]
+#### Request Object
+
+#### `Pickup`
+
+| Field  | Description  | Type |  Required | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| reference | Your unique order id or reference | string | Y | CO-0001 |
+| pickupDate | Date for the pickup to be executed on (must be 2 days in advance | date Format YYYY-MM-DD | Y | 2018-11-30 |
+| source | See `deliveryInfo` | object | Y |  |
+| destination | See `deliveryInfo` | object | Y |  |
+
+#### `deliveryInfo`
+
+| Field  | Description  | Type | Req | Example |
+| :------------ |:---------------|:-----|:---:|:---|
+| contactName | Customer's full name | string(30) | Y | John Doe |
+| businessName | Company name | string(20) |  | Parcelninja |
+| phone | Customer's _valid_ contact phone number | string(10) | Y | 0111234567 |
+| addressLine1 | Address Line 1 | string(50) | Y | 10 Church Road |
+| addressLine2 | Address Line 2 | string(50) |  |  |
+| suburb | Suburb | string(50) | Y | Bryanston |
+| postCode | Postal Code | string(4) | Y | 2196 |
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+    + Body
+                
+            {
+  "reference": "A managed pickup",
+  "pickupDate": "2018-11-13",
+  "source": {
+    "contactName": "Someones Name",
+    "businessName": "",
+    "addressLine1": "a road",
+    "addressLine2": "",
+    "suburb": "Sandton",
+    "postCode": "2196",
+    "phone": "0831234567"
+  },
+  "destination": {
+    "contactName": "Another Name",
+    "businessName": "",
+    "addressLine1": "another road",
+    "addressLine2": "",
+    "suburb": "Linbro Park",
+    "postCode": "2090",
+    "phone": "0831234567"
+  }
+}
+
++ Response 204 (application/json)
+    + Header
+            
+            x-originator: Store.Api.2.41.8.0
+            x-parcelninja-pickup-id: 54
+            x-request-id: e06490f4-56b4-42e9-a801-601cd0ab4e41
+
+# Group Delivery Quoting
+Parcelninja allows you to request a granular list of delivery options from all of our integrated couriers. The returned delivery quotes are courier agnostic and guaranteed (if specified).
+Integrating stores may wish to calculate a delivery cost for an order before the order is paid for. This is done by first requesting the quote, then binding the quote to the outbound by including the returned `quoteId` of the particular quote.
+
+
+
+The recommended practice is to:
+  1. Retrieve Delivery Quote
+  2. Display price to customer (if necessary)
+  3. Create new Outbound using the corresponding `DeliveryQuoteId` of the returned Quote.
+  4. Creating a new Outbound using a `DeliveryQuoteId: 0` will cause a new quote (cheapest) to be internally generated when the Outbound is created.
+  
+Please note: Postal Code is more important than Suburb. If Suburb and Postal Code do not match, we will use the Postal Code for the quote.
+
+
+This functionality also allows you to retrieve quotes for items that may not be in stock and for agnostic items (by simply supplying the dimensions). The following cases are supported:
+
+|   | Case                                      | Response   | Guaranteed Price | Dates Shown |
+| --- | ---------------------------------------- | -------   | :-------------: | :----------: |
+| 1  | All items are in stock.                   | Quote List with Nominated Options | Yes              | Yes |
+| 2  | Some items are in stock and the ones not in stock have historical dimensions. | Quote List | Yes | No |
+| 3  | Some items are in stock and the ones not in stock don’t have historical dimensions (you supply them). | Quote List | No | No |
+| 4  | No items are in stock and only dimensions are provided. | Estimate List | No | No |
+| 5  | Some items aren't in stock and dimensions are not provided. | Error | . | . |
+
+All returned quotes have a list of items, consider this example which contains a SKU that doesn't not have historical dimensions:
+```json
+{ 
+  ...
+
+  "items": [
+    {
+      "sku": "exampleSku1", 
+      "dimensions": {       
+        "length": 300,
+        "width": 200,
+        "height": 100,
+        "weight": 1500
+      },
+      "quantity": 20,
+      "fromReserve": false
+    },
+    {
+      ...
+    }
+  ]
+}
+```
+
+__Lengths__ are measured in `mm`, __Weights__ in `g`.
+The `startDate` and `endDate` values returned are __indicative__ of the service code used.
+
+### Items in the Reserved Pool
+If you'd like to request a Delivery Quote for currently reserved items, you must specify an additional `item` parameter, `fromReserve: <true|false>` which indicates that the supplied item quantity comes from the reserve pool. If omitted, `fromReserve` is implicitly assumed `false`.
+
+## Get Delivery Quotes [/delivery/quote]
+### Get List of Delivery Quotes [POST]
+
+Return a granular list of delivery quotes ordered by the fastest option. In this case, some SKUs are out of stock but you have supplied dimensions, so this is Case 3 from above.
+
++ Request (application/json)
+
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVAbjc2FtZQ==
+
+    + Body
+    
+            {
+              "deliveryInformation": {
+                "postalCode": "2196",
+                "suburb": "Bryanston"
+              },
+              "items": [
+                {
+                  "sku": "5126000229",
+                  "quantity": 1
+                },
+                {
+                  "sku": "testSku",
+                  "dimensions": {
+                    "width": 250,
+                    "length": 100,
+                    "height": 200,
+                    "weight": 800
+                  },
+                  "quantity": 1
+                }
+              ]
+            }
+
++ Response 200 (application/json)
+
+    + Header
+    
+            x-request-id: 066A8A66-F35F-43DF-9D57-0879B0031D5B
+
+    + Body
+        
+            [
+              {
+                "cost": 35.5,
+                "quoteId": 887166,
+                "service": {
+                  "code": "S1",
+                  "description": "Next business day",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 300.5,
+                "quoteId": 887169,
+                "service": {
+                  "code": "S1.3",
+                  "description": "Next business day, after 17:00",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 20.5,
+                "quoteId": 887167,
+                "service": {
+                  "code": "S2",
+                  "description": "In two business days",
+                  "workingDays": 2
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 30.5,
+                "quoteId": 887163,
+                "service": {
+                  "code": "ND",
+                  "description": "Nominated date delivery",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 300.5,
+                "quoteId": 887164,
+                "service": {
+                  "code": "ND.3",
+                  "description": "Nominated date, after 17:00",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 130.5,
+                "quoteId": 887165,
+                "service": {
+                  "code": "ND.S",
+                  "description": "Nominated saturday delivery",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              },
+              {
+                "cost": 10,
+                "quoteId": 1,
+                "service": {
+                  "code": "S0",
+                  "description": "Collect from warehouse",
+                  "workingDays": 0
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              }
+            ]
+            
+## Get Cheapest Delivery Quote [/delivery/quote/cheapest]
+### Get Cheapest Delivery Quote [POST]
+
+Returns the cheapest delivery quote. In this case, some SKUs are out of stock but you have supplied dimensions, so this is Case 3 from above.
+
++ Request (application/json)
+
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVAbjc2FtZQ==
+
+    + Body
+    
+            {
+              "deliveryInformation": {
+                "postalCode": "2196",
+                "suburb": "Bryanston"
+              },
+              "items": [
+                {
+                  "sku": "testSku",
+                  "quantity": 1,
+                  "dimensions": {
+                    "width": 250,
+                    "length": 100,
+                    "height": 200,
+                    "weight": 800
+                  },
+                  "fromReserve": false
+                }
+              ]
+            }
+
++ Response 200 (application/json)
+
+    + Header
+    
+            x-request-id: 066A8A66-F35F-43DF-9D57-0879B0031D5B
+
+    + Body
+        
+            [
+              {
+                "cost": 35.5,
+                "quoteId": 887166,
+                "service": {
+                  "code": "S1",
+                  "description": "Next business day",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              }
+            ]            
+
+## Get Fastest Delivery Quote [/delivery/quote/fastest]
+### Get Fastest Delivery Quote [POST]
+
+Returns the fastest delivery quote
+
++ Request (application/json)
+
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVAbjc2FtZQ==
+
+    + Body
+    
+            {
+              "deliveryInformation": {
+                "postalCode": "2196",
+                "suburb": "Bryanston"
+              },
+              "items": [
+                {
+                  "sku": "testSku",
+                  "quantity": 1,
+                  "dimensions": {
+                    "width": 250,
+                    "length": 100,
+                    "height": 200,
+                    "weight": 800
+                  },
+                  "fromReserve": false
+                }
+              ]
+            }
+
++ Response 200 (application/json)
+
+    + Header
+    
+            x-request-id: 066A8A66-F35F-43DF-9D57-0879B0031D5B
+
+    + Body
+        
+            [
+              {
+                "cost": 35.5,
+                "quoteId": 887166,
+                "service": {
+                  "code": "S1",
+                  "description": "Next business day",
+                  "workingDays": 1
+                },
+                "weight": 1875,
+                "priceGuaranteed": false,
+                "noStock": true
+              }
+            ]            
+            
+## Nominate Date / Check Delivery Quote [/delivery/CheckQuote]
+### Check Delivery Quote [POST]
+
+This end point has two major functions:
+
+    1 - To check the information surrounding a delivery quote
+    2 - Nominate a date for a given nominated service offering 
+    
+In the first case, only the DeliveryQuoteId of interest need be provided and the related Delivery Quote object will be returned
+
+In the second case a nominated date must be provided along with a quoteId with the relevant service offering 
+(e.g. if the nominated date is afterhours the quoteId must refer to an after hours service offering)
+, __if this nominated date is fulfillable a new delivery quote will be generated__ and returned,
+if this is not possible an error message shall result instead.
+
+__Please note this newly generated delivery quote may not be altered and must be used when creating an outbound__. If a diffrent nominated date is required please use the original DeliveryQuoteId for that nominted service offering.
+
++ Request (application/json)
+
+    + Header
+    
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVAbjc2FtZQ==
+
+    + Body
+    
+            {
+              "deliveryQuoteId": 942529,
+              "nominatedDate": "2015/06/01T08:38"
+            }
+
++ Response 200 (application/json)
+
+    + Header
+    
+            x-request-id: 066A8A66-F35F-43DF-9D57-0879B0031D5B
+
+    + Body
+    
+            {
+              "cost": 132.7,
+              "deliveryEndDate": "2015-06-01T08:00:00",
+              "deliveryStartDate": "2015-06-01T17:00:00",
+              "dispatchDate": "2015-05-29T16:00:00",
+              "quoteId": 942529,
+              "service": {
+                "code": "ND",
+                "description": "Nominated date delivery",
+                "workingDays": 1
+              },
+              "weight": 27601,
+              "priceGuaranteed": true
+            }
+             
+# Group Tracking
+
+## Track waybill [/tracking/{waybillNo}]
+
++ Parameters
+    + waybillNo (required, string, `WIA1340707`) ... `waybillNo` of the Order to perform action with.
+
+### Track waybill [GET]
+
+Returns the last updated courier tracking status for a waybill.
+
++ Request (application/json)
+
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+                "courier": "Fastway",
+                "contactNo": "0119742845",
+                "trackingNo": "LA0027443313",
+                "estDeliveryStartDate": "20140718080000",
+                "estDeliveryEndDate": "20140719170000",
+                "status": 
+                {
+                    "code": 300,
+                    "timeStamp": "20140717071723",
+                    "description": "Onboard - the parcel is onboard the Courier vehicle."
+                }
+            }
+
+## Track waybill with event history [/tracking/{waybillNo}/events]
+
++ Parameters
+    + waybillNo (required, string, `WIA1340707`) ... `waybillNo` of the Order to perform action with.
+
+### Track waybill with event history [GET]
+
+Returns the full courier tracking information for a waybill.
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+    + Header
+            
+            x-parcelninja-elapsed-ms: 12
+            x-parcelninja-log-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+        
+            {
+                "courier": "Fastway",
+                "contactNo": "0119742845",
+                "trackingNo": "LA0027443313",
+                "estDeliveryStartDate": "20140718080000",
+                "estDeliveryEndDate": "20140719170000",
+                "status": 
+                {
+                    "code": 300,
+                    "timeStamp": "20140717071723",
+                    "description": "Onboard - the parcel is onboard the Courier vehicle."
+                },
+                "events": 
+                [
+                  {   
+                     "code": 300,
+                     "timeStamp": "20140717071723",
+                     "description": "Onboard - the parcel is onboard the Courier vehicle."
+                  },
+                  {
+                     "code": 300,
+                     "timeStamp": "20140717062048",
+                     "description": "Your parcel has been received in the Pretoria depot."
+                  },
+                  {
+                     "code": 300,
+                     "timeStamp": "20140716011022",
+                     "description": "Your parcel is currently in transit between our 'Johannesburg' and 'Pretoria' depots."
+                  }
+                ]
+            }
+
+# Group Lookups 
+Notes related resources of the **Lookups API**
+
+## Order Types [/lookups/getOrderTypes]
+
+Write-up about order types
+
+### Retrieve order types [GET]
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+
+            [
+                { "id": 1, "description": "Inbound Stock" }, 
+                { "id": 2, "description": "Outbound Order" }, 
+                { "id": 3, "description": "Inbound Customer Return" }, 
+                { "id": 4, "description": "Outbound stock return" }
+            ]
+            
+## Event Status Types [/lookups/getEventTypes/?typeId=1]
+
+Returns a list of event statuses
+
++ Parameters
+    + typeId (required, number, `1`) ... 1: Item Events 2: Order Events
+    
+### Retrieve Event Statuses [GET]
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+
+            [
+                {
+                "code": 200,
+                "description": "Awaiting arrival"
+                },    
+                {
+                "code": 201,
+                "description": "Arrived at warehouse"
+                },
+                {
+                "code": 202,
+                "description": "Being Processed"
+                },
+                {
+                "code": 203,
+                "description": "Processing complete"
+                },
+                {
+                "code": 204,
+                "description": "Processing complete with variance"
+                }
+            ]
+    
+## Suburbs and postal codes [/lookups/getSuburbs/?search=Sandton]
+
+Returns all suburbs if search paramater not supplied
+
++ Parameters
+    + search (optional, string, `Sandton`) ... `search` for a spesific Suburb to perform action with.
+
+
+### Retrieve Suburbs and postal codes [GET]
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+
+            [
+                {
+                "postalCode":"2146",
+                "suburb":"Bryanston",
+                "city": "Sandton",
+                "province":"Gauteng"
+                }
+            ]
+            
+# Group Logs
+## Specific Log [/logs/{logid}]
+
++ Parameters
+    + logid (required, GUID,  `dfb2b13d-a146-47a6-b247-0f4c84a70a85`) ... `logId` of the Logs to perform action with. In this case an `logId` of dfb2b13d-a146-47a6-b247-0f4c84a70a85 indicates an inbound
+    
+### Retrieve a Log [GET]
+
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+        
++ Response 200 (application/json)
+
+    + Header
+            
+            x-request-id: dfb2b13d-a146-47a6-b247-0f4c84a70a85
+
+    + Body
+
+            {
+                "userId": 12,
+                "resource": "/api/v1/inventory",
+                "method": "GET",
+                "reqHeaders": 
+                {
+                    "cache-Control": " no-cache",
+                    "connection": " Keep-Alive",
+                    "accept": " */*",
+                    "accept-Encoding": " gzip",
+                    "accept-Language": " en-GB, en-US; q=0.8, en; q=0.6",
+                    "authorization": " Basic R3JhYml0OkM4OTlERUQzLThEQzgtNEE2QS1CRUI1LTdDQUU5Nzk0QzdCNg==",
+                    "cookie": " __cfduid=d8cdbc798994ccb111cc353f929aab4591395128414754; WRUID=1847812818.743169710; __CT_Data=gpv=141&apv_23610_www07=141&cpv_23610_www07=118; _hp2_id.46314924=7845303704001560.2475006739.0959228068; __utma=138811698.1831200061.1395128416.1406798775.1406802914.117; __utmc=1"
+                },
+                "reqBody": "",
+                "respHeaders": 
+                {
+                    "cache-Control": " no-cache",
+                    "connection": " Keep-Alive",
+                    "accept": " */*",
+                    "accept-Encoding": " gzip",
+                    "accept-Language": " en-GB, en-US; q=0.8, en; q=0.6",
+                    "authorization": " Basic R3JhYml0OkM4OTlERUQzLThEQzgtNEE2QS1CRUI1LTdDQUU5Nzk0QzdCNg==",
+                    "cookie": " __cfduid=d8cdbc798994ccb111cc353f929aab4591395128414754; WRUID=1847812818.743169710; __CT_Data=gpv=141&apv_23610_www07=141&cpv_23610_www07=118; _hp2_id.46314924=7845303704001560.2475006739.0959228068; __utma=138811698.1831200061.1395128416.1406798775.1406802914.117; __utmc=1"
+                },
+                "respBody": "{\"items\":[{\"itemNo\":\"HH10TTR1GR\",\"name\":\"10 Tier Shoe Racks - heart holed\",\"instock\":1,\"allocated\":0,\"unallocated\":0,\"onReorder\":0,\"broken\":0,\"reserved\":0},{\"itemNo\":\"100PCDK01\",\"name\":\"100pc Cake Decorating Kit -\",\"instock\":2,\"allocated\":0,\"unallocated\":0,\"onReorder\":0,\"broken\":0,\"reserved\":0},{\"itemNo\":\"12PCKFSET12\",\"name\":\"12pc Coloured Knife Set -\",\"instock\":10,\"allocated\":1,\"unallocated\":0,\"onReorder\":0,\"broken\":0,\"reserved\":0},{\"itemNo\":\"12SPRKP1\",\"name\":\"12pc Spice rack -\",\"instock\":1,\"allocated\":1,\"unallocated\":0,\"onReorder\":0,\"broken\":0,\"reserved\":0},
+                "status": "200",
+                "elaspedMS": 462,
+                "ipAddress": "105.236.64.209"
+            }
+
+# Group Webhooks
+Webhooks are created for all major events in the Parcelninja process. When an event occurs, a message is fired off to the custom URL defined below.
+
+We send callbacks for the following events:
+
+#### Inbound Events
+- Awaiting Arrival (Code: 200)
+- Arrived at warehouse (Code: 201)
+- Being Processed (Code: 202)
+- Processing complete (Code: 203)
+- Processing complete with variance (Code: 204)
+
+#### Outbound Events
+- Awaiting stock (Code: 240)
+- In picking queue (Code: 290)
+- Ready to be picked (Code: 241)
+- In packing queue (Code: 291)
+- Ready to be packed (Code: 242)
+- Awaiting courier pickup (Code: 243)
+- Dispatched with courier (Code: 244)
+- Delivered (Code: 245)
+- Awaiting collection (Code: 246)
+- Collected (Code: 247)
+- Unable to deliver (Code: 280)
+- Order on hold (Code: 282)
+- Unsuccessful (Code: 390)
+- Courier Collection Unsuccessful (Code: 391)
+- Courier Delivery Unsuccessful (Code: 392)
+
+A callback message send to `hookUrl` looks like this:
+```json
+{
+  "id": 12154235,
+  "clientId": "GHJLAOK987",
+  "type": {
+    "id": 2,
+    "description": "Order"
+  },
+  "timeStamp": "20210719062140",
+  "events": [
+    {
+      "code": 245,
+      "timeStamp": "20220225114251",
+      "description": "Delivered"
+    },
+    {
+      "code": 244,
+      "timeStamp": "20220224123933",
+      "description": "Dispatched with courier"
+    },
+    {
+      "code": 243,
+      "timeStamp": "20220224080032",
+      "description": "Awaiting courier pickup"
+    },
+    {
+      "code": 242,
+      "timeStamp": "20220224075937",
+      "description": "Ready to be packed"
+    },
+    {
+      "code": 291,
+      "timeStamp": "20220224073350",
+      "description": "In packing queue"
+    },
+    {
+      "code": 241,
+      "timeStamp": "20220224070015",
+      "description": "Ready to be picked"
+    },
+    {
+      "code": 240,
+      "timeStamp": "20220224065919",
+      "description": "Awaiting Stock"
+    },
+    {
+      "code": 290,
+      "timeStamp": "20220224065919",
+      "description": "In picking queue"
+    }
+  ],
+  "deliveryInfo": {
+    "trackingURL": "https://store.parcelninja.com/tracking.aspx?WaybillNo=PNJ12154235",
+    "waybillNumber": "PNJ12154235"
+  }
+}
+```
+## Create [/hooks/{postCallback}]
+
+### Create Callback Hook [POST]
+Set a custom URL that hooks should be sent to.
+#### JSON Fields
+
+| Field  | Description  | Type |  Req | Example |
+| :------------ |:---------------|:-----|:-----:|:-----|
+| `hookUrl` | URL of the service that hooks should be sent to | URL | Y | `http://www.example.com` |
+
+
+
++ Request (application/json)
+    + Header
+
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+    
+    + Body
+
+            {
+                "hookUrl": "http://www.example.com/"
+            }
+
++ Response 200 (application/json)
+
+## Retrieve [/hooks/{getCallback}]
+### Retrieve Callback URL [GET]
+Retrieve the callback URL defined for a site.
++ Request (application/json)
+    + Header
+        
+            Accept: application/json
+            Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==
+
+
+
++ Response 200 (application/json)
+    + Header
+
+            x-request-id: C487126C-4511-4B19-9EDA-9B2ED937D84B
+            
+    + Body
+    
+            {
+                "hookUrl": "http://www.example.com/"
+            }
+            
+            
+
