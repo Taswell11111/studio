@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -135,7 +136,7 @@ const updateShipmentStatusFlow = ai.defineFlow(
       }
 
       // Update the document in Firestore
-      const { firestore } = initializeFirebaseOnServer();
+      const { firestore } = await initializeFirebaseOnServer();
       const shipmentRef = firestore.collection('shipments').doc(shipmentId);
       
       await shipmentRef.update({
