@@ -4,9 +4,10 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, signInWithCustomToken, Auth } from 'firebase/auth';
 import { sign } from 'jsonwebtoken';
 
-const APP_NAME = 'SHIPMENT_LOOK_ADMIN_APP';
+// Use a unique name for the server app instance to avoid conflicts.
+const SERVER_APP_NAME = 'firebase-server-app';
 
-// Store a cached instance of the initialized app.
+// Store cached instances to avoid re-initialization.
 let serverApp: FirebaseApp | null = null;
 let serverAuth: Auth | null = null;
 let serverFirestore: Firestore | null = null;
@@ -16,9 +17,10 @@ let serverFirestore: Firestore | null = null;
  * This provides admin-like privileges for server-side flows (e.g., Genkit).
  * It creates a custom JWT token to authenticate as a "server user".
  */
-async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firestore: Firestore }> {
+async function initializeServerApp() {
+  // If the app is already initialized and the user is authenticated, return cached instances.
   if (serverApp && serverFirestore && serverAuth?.currentUser) {
-    return { firebaseApp: serverApp, firestore: serverFirestore };
+    return { firebaseApp: serverApp, firestore: serverFirestore, auth: serverAuth };
   }
 
   // These should be set as environment variables in the App Hosting backend.
@@ -34,7 +36,7 @@ async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firest
   const serverUid = 'shipment-look-server-worker';
 
   // Create a custom JWT token. This acts as the "password" for our server.
-  const token = sign({ uid: serverUid, /* can add other claims here */ }, privateKey, {
+  const token = sign({ uid: serverUid }, privateKey, {
     algorithm: 'RS256',
     issuer: serviceAccountEmail,
     subject: serviceAccountEmail,
@@ -43,36 +45,31 @@ async function initializeServerApp(): Promise<{ firebaseApp: FirebaseApp, firest
   });
   
   const firebaseConfig = {
-      projectId: projectId,
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
       authDomain: `${projectId}.firebaseapp.com`,
+      projectId: projectId,
   };
 
-  // Initialize the Firebase app instance.
-  const app = getApps().find(a => a.name === APP_NAME) || initializeApp(firebaseConfig, APP_NAME);
+  // Initialize the Firebase app instance, or get it if it already exists.
+  serverApp = getApps().find(a => a.name === SERVER_APP_NAME) || initializeApp(firebaseConfig, SERVER_APP_NAME);
   
-  const auth = getAuth(app);
+  serverAuth = getAuth(serverApp);
   
   // If we're not already signed in, sign in with the custom token.
-  if (!auth.currentUser || auth.currentUser.uid !== serverUid) {
-    await signInWithCustomToken(auth, token);
+  if (!serverAuth.currentUser || serverAuth.currentUser.uid !== serverUid) {
+    await signInWithCustomToken(serverAuth, token);
   }
   
-  const firestore = getFirestore(app);
+  // Get firestore instance for the named database.
+  serverFirestore = getFirestore(serverApp, 'shipment-look');
 
-  // Cache the initialized instances.
-  serverApp = app;
-  serverAuth = auth;
-  serverFirestore = firestore;
-
-  return { firebaseApp: serverApp, firestore: serverFirestore };
+  return { firebaseApp: serverApp, firestore: serverFirestore, auth: serverAuth };
 }
 
 /**
  * Gets a server-side, authenticated Firestore instance.
  * This is the primary function to be used by Genkit flows.
  */
-export async function initializeFirebaseOnServer(): Promise<{ firestore: Firestore }> {
-  const { firestore } = await initializeServerApp();
-  return { firestore };
+export async function initializeFirebaseOnServer(): Promise<{ firestore: Firestore, auth: Auth, firebaseApp: FirebaseApp }> {
+  return initializeServerApp();
 }
-

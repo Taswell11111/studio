@@ -9,6 +9,7 @@ config();
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { format } from 'date-fns';
+import { STORES } from '@/lib/stores';
 
 // --- SCHEMAS ---
 
@@ -42,20 +43,6 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
   },
   async () => {
     
-    type WarehouseCredentials = {
-      name: string;
-      apiUsername?: string;
-      apiPassword?: string;
-    };
-
-    const credentialsList: WarehouseCredentials[] = [
-      { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
-      { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
-      { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD },
-      { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD },
-      { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
-    ];
-    
     const testResults: ConnectionTestResult[] = [];
     const logs: string[] = [];
     
@@ -66,10 +53,10 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     const startDate = format(yesterday, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
 
-    for (const creds of credentialsList) {
+    for (const creds of STORES) {
       logs.push(`[Connection Test] Testing store: ${creds.name}`);
-      if (!creds.apiUsername || !creds.apiPassword) {
-        const errorMsg = 'Missing API Username or Password in environment variables.';
+      if (!creds.apiKey || !creds.apiSecret) {
+        const errorMsg = 'Missing API Key or Secret in store configuration.';
         logs.push(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`);
         testResults.push({
           storeName: creds.name,
@@ -82,7 +69,7 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
       // This is a lightweight, valid API call to list outbounds.
       // It serves as a reliable way to test authentication and connectivity.
       const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
-      const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
+      const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
       
       logs.push(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`);
 

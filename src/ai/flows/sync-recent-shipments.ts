@@ -13,7 +13,8 @@ import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import type { Inbound, Shipment, ShipmentItem } from '@/types';
+import type { Inbound, Shipment } from '@/types';
+import { STORES, type Store } from '@/lib/stores';
 
 // --- INPUT/OUTPUT SCHEMAS ---
 
@@ -36,26 +37,6 @@ export type SyncOutput = z.infer<typeof SyncOutputSchema>;
 export async function syncRecentShipments(input: SyncInput): Promise<SyncOutput> {
   return syncRecentShipmentsFlow(input);
 }
-
-
-// --- API CREDENTIALS & CONFIG ---
-
-type WarehouseCredentials = {
-  name: string;
-  apiUsername?: string;
-  apiPassword?: string;
-};
-
-const credentialsMap: WarehouseCredentials[] = [
-    { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
-    { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
-    { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD },
-    { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD },
-    { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
-];
-
-const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
-
 
 // --- THE GENKIT FLOW ---
 
@@ -83,8 +64,8 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     
     console.log(`[Sync Flow] Starting sync from ${fromDateStr} to ${toDateStr}.`);
 
-    for (const creds of credentialsMap) {
-        if (!creds.apiUsername || !creds.apiPassword) {
+    for (const creds of STORES) {
+        if (!creds.apiKey || !creds.apiSecret) {
             const errorMsg = `Skipping sync for ${creds.name}: Missing credentials.`;
             console.warn(errorMsg);
             continue;
@@ -179,7 +160,7 @@ function formatApiDate(dateStr: string): string {
   }
 }
 
-async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', collectionRef: FirebaseFirestore.CollectionReference, fromDate: string, toDate: string) {
+async function processEndpoint(creds: Store, endpoint: 'inbounds' | 'outbounds', collectionRef: FirebaseFirestore.CollectionReference, fromDate: string, toDate: string) {
     let created = 0;
     let updated = 0;
     let error: string | null = null;
@@ -226,9 +207,10 @@ async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds'
 }
 
 
-async function fetchFromParcelNinja(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', fromDate: string, toDate: string) {
+async function fetchFromParcelNinja(creds: Store, endpoint: 'inbounds' | 'outbounds', fromDate: string, toDate: string) {
+    const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
     const url = `${WAREHOUSE_API_BASE_URL}/${endpoint}/?startDate=${fromDate}&endDate=${toDate}&pageSize=1000`;
-    const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
+    const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
     
     const response = await fetch(url, {
         method: 'GET',

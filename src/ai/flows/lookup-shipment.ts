@@ -24,6 +24,7 @@ import {
 } from '@/types';
 import { format } from 'date-fns';
 import { z } from 'zod';
+import { STORES, type Store } from '@/lib/stores';
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
@@ -34,29 +35,15 @@ const DynamicLookupInputSchema = z.object({
   searchTerm: z.string().describe('A generic search term, which can be an Order ID, Customer Name, Item Name, etc.'),
 });
 
-type WarehouseCredentials = {
-  name: string;
-  apiUsername?: string;
-  apiPassword?: string;
-  prefix: string;
-};
-
-const credentialsList: WarehouseCredentials[] = [
-    { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD, prefix: 'D' },
-    { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD, prefix: 'H' },
-    { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD, prefix: 'J' },
-    { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD, prefix: 'S' },
-    { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD, prefix: 'R' },
-];
 
 const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
 
-async function fetchFromParcelNinja(url: string, storeName: string, creds: WarehouseCredentials, extraHeaders = {}) {
-    if (!creds.apiUsername || !creds.apiPassword) {
+async function fetchFromParcelNinja(url: string, storeName: string, creds: Store, extraHeaders = {}) {
+    if (!creds.apiKey || !creds.apiSecret) {
         console.warn(`[${storeName}] Skipping API call: Missing credentials.`);
         return null;
     }
-    const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
+    const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
     const headers = { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/json', ...extraHeaders };
 
     try {
@@ -159,7 +146,7 @@ const lookupShipmentFlow = ai.defineFlow(
  */
 async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date): Promise<Shipment | Inbound | null> {
     const searchPrefix = searchTerm.charAt(0).toUpperCase();
-    const sortedCreds = [...credentialsList].sort((a, b) => {
+    const sortedCreds = [...STORES].sort((a, b) => {
         if (a.prefix === searchPrefix) return -1;
         if (b.prefix === searchPrefix) return 1;
         return 0;
