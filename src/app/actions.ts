@@ -55,7 +55,8 @@ export async function refreshAllShipmentsAction() {
 export async function testConnectionsAction() {
   try {
     const result = await testParcelninjaConnection();
-    return result;
+    // Return the result directly as it matches the expected structure.
+    return result; 
   } catch (error: any) {
     console.error("Critical error in testConnectionsAction:", error);
     return {
