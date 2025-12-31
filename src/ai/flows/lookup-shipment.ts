@@ -192,7 +192,7 @@ async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Dat
  */
 async function saveRecordToFirestore(record: Shipment | Inbound) {
   try {
-    const { firestore } = await initializeFirebaseOnServer();
+    const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
     const docId = String(record.id);
@@ -210,7 +210,7 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
  * Searches the Firestore cache for a matching record.
  */
 async function searchFirestoreCache(searchTerm: string): Promise<Shipment | Inbound | null> {
-    const { firestore } = await initializeFirebaseOnServer();
+    const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
     const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
