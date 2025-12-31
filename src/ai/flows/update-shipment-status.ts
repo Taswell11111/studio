@@ -1,4 +1,3 @@
-
 'use server';
 import { config } from 'dotenv';
 config();
@@ -18,7 +17,9 @@ import {
   type UpdateShipmentStatusOutput,
 } from '@/types';
 import { STORES } from '@/lib/stores';
-import { doc, updateDoc } from 'firebase/firestore';
+
+// Use admin SDK methods, not client SDK
+import type { DocumentReference } from 'firebase-admin/firestore';
 
 // Main exported function that the client will call
 export async function updateShipmentStatus(input: UpdateShipmentStatusInput): Promise<UpdateShipmentStatusOutput> {
@@ -82,11 +83,14 @@ const updateShipmentStatusFlow = ai.defineFlow(
       }
 
       // Update the document in Firestore
-      const { firestore } = await initializeFirebaseOnServer();
+      const { firestore } = initializeFirebaseOnServer(); // Note: removed await as it is synchronous now
       const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-      const shipmentDocRef = doc(firestore, `artifacts/${appId}/public/data/shipments`, shipmentId);
       
-      await updateDoc(shipmentDocRef, {
+      // Use Admin SDK syntax: firestore.doc(...)
+      const shipmentDocRef = firestore.doc(`artifacts/${appId}/public/data/shipments/${shipmentId}`);
+      
+      // Use Admin SDK syntax: ref.update(...)
+      await shipmentDocRef.update({
         'Status': newStatus,
         'Status Date': new Date().toISOString(),
         'updatedAt': new Date(), // Important for the "last 3 days" query
@@ -107,5 +111,3 @@ const updateShipmentStatusFlow = ai.defineFlow(
     }
   }
 );
-
-    
