@@ -109,7 +109,10 @@ export default function ShipmentDashboard() {
     startTestTransition(async () => {
       setLogs([]); // Clear previous logs
       toast({ title: 'Testing Connections...', description: 'Pinging all configured warehouse APIs.' });
-      const { results, error, logs: newLogs } = await testConnectionsAction();
+      
+      const response = await testConnectionsAction();
+      
+      const { results, error, logs: newLogs } = response;
       
       setLogs(newLogs || ['No logs were returned.']);
 
@@ -119,7 +122,7 @@ export default function ShipmentDashboard() {
       }
       
       let successCount = 0;
-      results.forEach(result => {
+      results.forEach((result: any) => {
         if (result.success) {
           successCount++;
         }
