@@ -31,7 +31,7 @@ function initializeServerApp() {
  * This function ensures Firebase is initialized and returns the firestore service.
  * It is idempotent and safe to call multiple times.
  */
-export async function initializeFirebaseOnServer(): Promise<{ firestore: Firestore }> {
+export function initializeFirebaseOnServer(): { firestore: Firestore } {
   // Ensure the app is initialized before returning the firestore instance.
   if (!firestore) {
     initializeServerApp();
