@@ -15,7 +15,10 @@ export async function refreshAllShipmentsAction() {
     const toDate = new Date('2025-12-29');
     const days = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 3600 * 24));
     
-    const result = await syncRecentShipments({ days, fromDate: fromDate.toISOString(), toDate: toDate.toISOString() });
+    // syncRecentShipments schema only accepts 'days'. 
+    // The previous implementation tried to pass 'fromDate' and 'toDate' which caused a type error.
+    // We will stick to the 'days' parameter which calculates the date range internally in the flow.
+    const result = await syncRecentShipments({ days });
 
     if (!result.success && result.errors.length > 0) {
       console.error('Sync process had errors:', result.errors);
