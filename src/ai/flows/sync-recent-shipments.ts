@@ -1,4 +1,3 @@
-
 'use server';
 import { config } from 'dotenv';
 config();
@@ -14,15 +13,12 @@ import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import type { Inbound, Shipment } from '@/types';
-import { STORES, type Store } from '@/lib/stores';
-import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import type { CollectionReference } from 'firebase-admin/firestore'; // Import CollectionReference type
 
 // --- INPUT/OUTPUT SCHEMAS ---
 
 const SyncInputSchema = z.object({
   days: z.number().describe('The number of days back to check for updated shipments.'),
-  fromDate: z.string().optional().describe('The start date for the sync in ISO format.'),
-  toDate: z.string().optional().describe('The end date for the sync in ISO format.'),
 });
 type SyncInput = z.infer<typeof SyncInputSchema>;
 
@@ -39,6 +35,26 @@ export async function syncRecentShipments(input: SyncInput): Promise<SyncOutput>
   return syncRecentShipmentsFlow(input);
 }
 
+
+// --- API CREDENTIALS & CONFIG ---
+
+type WarehouseCredentials = {
+  name: string;
+  apiUsername?: string;
+  apiPassword?: string;
+};
+
+const credentialsMap: WarehouseCredentials[] = [
+    { name: 'DIESEL', apiUsername: process.env.DIESEL_WAREHOUSE_API_USERNAME, apiPassword: process.env.DIESEL_WAREHOUSE_API_PASSWORD },
+    { name: 'HURLEY', apiUsername: process.env.HURLEY_WAREHOUSE_API_USERNAME, apiPassword: process.env.HURLEY_WAREHOUSE_API_PASSWORD },
+    { name: 'JEEP', apiUsername: process.env.JEEP_APPAREL_WAREHOUSE_API_USERNAME, apiPassword: process.env.JEEP_APPAREL_WAREHOUSE_API_PASSWORD },
+    { name: 'SUPERDRY', apiUsername: process.env.SUPERDRY_WAREHOUSE_API_USERNAME, apiPassword: process.env.SUPERDRY_WAREHOUSE_API_PASSWORD },
+    { name: 'REEBOK', apiUsername: process.env.REEBOK_WAREHOUSE_API_USERNAME, apiPassword: process.env.REEBOK_WAREHOUSE_API_PASSWORD },
+];
+
+const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
+
+
 // --- THE GENKIT FLOW ---
 
 const syncRecentShipmentsFlow = ai.defineFlow(
@@ -47,26 +63,25 @@ const syncRecentShipmentsFlow = ai.defineFlow(
     inputSchema: SyncInputSchema,
     outputSchema: SyncOutputSchema,
   },
-  async ({ days, fromDate, toDate }) => {
-    const { firestore } = await initializeFirebaseOnServer();
+  async ({ days }) => {
+    const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-    const shipmentsColRef = collection(firestore, `artifacts/${appId}/public/data/shipments`);
-    const inboundsColRef = collection(firestore, `artifacts/${appId}/public/data/inbounds`);
+    const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
+    const inboundsColRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
     let totalCreated = 0;
     let totalUpdated = 0;
     const errorMessages: string[] = [];
 
-    const dateTo = toDate ? new Date(toDate) : new Date();
-    const dateFrom = fromDate ? new Date(fromDate) : new Date(dateTo.getTime() - days * 24 * 60 * 60 * 1000);
+    const dateTo = new Date();
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - days);
     
     const toDateStr = format(dateTo, 'yyyyMMdd');
     const fromDateStr = format(dateFrom, 'yyyyMMdd');
-    
-    console.log(`[Sync Flow] Starting sync from ${fromDateStr} to ${toDateStr}.`);
 
-    for (const creds of STORES) {
-        if (!creds.apiKey || !creds.apiSecret) {
+    for (const creds of credentialsMap) {
+        if (!creds.apiUsername || !creds.apiPassword) {
             const errorMsg = `Skipping sync for ${creds.name}: Missing credentials.`;
             console.warn(errorMsg);
             continue;
@@ -108,6 +123,7 @@ const syncRecentShipmentsFlow = ai.defineFlow(
 // --- HELPER FUNCTIONS ---
 function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
   const status = data.status?.description || 'Unknown';
+  
   const statusDate = data.status?.timeStamp ? formatApiDate(data.status.timeStamp) : new Date().toISOString();
   
   const formattedStatusDate = format(new Date(statusDate), 'yyyy-MM-dd HH:mm');
@@ -117,11 +133,9 @@ function mapParcelninjaToRecord(data: any, direction: 'Outbound' | 'Inbound', st
     'Direction': direction,
     'Shipment ID': String(data.clientId || data.id),
     'Source Store': storeName,
-    'Source Store Order ID': String(data.clientId || ''),
-    'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
+    'Source Store Order ID': String(data.channelId || data.clientId || ''),
     'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
-    'Email': data.deliveryInfo?.email || '',
     'Status': statusWithDate,
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || storeName,
@@ -161,7 +175,7 @@ function formatApiDate(dateStr: string): string {
   }
 }
 
-async function processEndpoint(creds: Store, endpoint: 'inbounds' | 'outbounds', collectionRef: FirebaseFirestore.CollectionReference, fromDate: string, toDate: string) {
+async function processEndpoint(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', collectionRef: CollectionReference, fromDate: string, toDate: string) {
     let created = 0;
     let updated = 0;
     let error: string | null = null;
@@ -172,27 +186,23 @@ async function processEndpoint(creds: Store, endpoint: 'inbounds' | 'outbounds',
         const records = apiRecords[endpoint] || [];
 
         if (!records || records.length === 0) {
-            console.log(`[${creds.name}/${direction}] No records found for the period.`);
             return { created, updated, error };
         }
         
-        console.log(`[${creds.name}/${direction}] Found ${records.length} records. Processing...`);
-
         const updates = records.map(async (record: any) => {
-            const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
-            const docId = mappedRecord.id;
-
+            const docId = String(record.clientId || record.id);
             if (!docId) return;
 
-            const docRef = doc(collectionRef, docId);
-            const docSnap = await getDoc(docRef);
-            
+            const docRef = collectionRef.doc(docId);
+            const docSnap = await docRef.get();
+            const mappedRecord = mapParcelninjaToRecord(record, direction, creds.name);
 
-            if (docSnap.exists()) {
-                await setDoc(docRef, mappedRecord, { merge: true });
+            if (docSnap.exists) {
+                // Always update the record to ensure all fields are fresh
+                await docRef.set(mappedRecord, { merge: true });
                 updated++;
             } else {
-                await setDoc(docRef, mappedRecord);
+                await docRef.set(mappedRecord);
                 created++;
             }
         });
@@ -208,10 +218,9 @@ async function processEndpoint(creds: Store, endpoint: 'inbounds' | 'outbounds',
 }
 
 
-async function fetchFromParcelNinja(creds: Store, endpoint: 'inbounds' | 'outbounds', fromDate: string, toDate: string) {
-    const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
+async function fetchFromParcelNinja(creds: WarehouseCredentials, endpoint: 'inbounds' | 'outbounds', fromDate: string, toDate: string) {
     const url = `${WAREHOUSE_API_BASE_URL}/${endpoint}/?startDate=${fromDate}&endDate=${toDate}&pageSize=1000`;
-    const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
+    const basicAuth = Buffer.from(`${creds.apiUsername}:${creds.apiPassword}`).toString('base64');
     
     const response = await fetch(url, {
         method: 'GET',
@@ -224,5 +233,3 @@ async function fetchFromParcelNinja(creds: Store, endpoint: 'inbounds' | 'outbou
     }
     return response.json();
 }
-
-    
