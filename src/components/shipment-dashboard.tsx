@@ -7,8 +7,9 @@ import { lookupShipment } from '@/ai/flows/lookup-shipment';
 import { testConnectionsAction } from '@/app/actions';
 import { initializeFirebase } from '@/firebase';
 import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
+import { STORES } from '@/lib/stores';
 
-import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database } from 'lucide-react';
+import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -18,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { RefreshAllButton } from './refresh-all-button';
 import { InboundCard } from './inbound-card';
 import { LogViewer } from './log-viewer';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type SearchResult = {
     shipment: Shipment | Inbound | null;
@@ -26,6 +28,7 @@ type SearchResult = {
 
 export default function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStore, setSelectedStore] = useState('All');
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,7 +76,10 @@ export default function ShipmentDashboard() {
     startSearchTransition(async () => {
       setSearchResult(null); // Clear previous result
       try {
-        const result = await lookupShipment({ sourceStoreOrderId: trimmedSearch });
+        const result = await lookupShipment({ 
+            sourceStoreOrderId: trimmedSearch,
+            storeName: selectedStore === 'All' ? undefined : selectedStore,
+        });
         
         if (result.shipment) {
           setSearchResult({ shipment: result.shipment, relatedInbound: result.relatedInbound });
@@ -211,22 +217,40 @@ export default function ShipmentDashboard() {
           </div>
         </Card>
 
-        <form onSubmit={handleSearch} className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            type="text"
-            className="w-full pl-11 pr-32 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
-            placeholder="Search by Order ID, Customer Name, Item..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button 
-            type="submit" 
-            className="absolute right-2 top-2 h-10" 
-            disabled={isSearching || !searchTerm.trim()}
-          >
-            {isSearching ? 'Searching...' : 'Search'}
-          </Button>
+        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-grow">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                    type="text"
+                    className="w-full pl-11 pr-4 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
+                    placeholder="Search by Order ID, Customer Name, Item..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            <div className="flex gap-2">
+                <Select value={selectedStore} onValueChange={setSelectedStore}>
+                    <SelectTrigger className="w-full sm:w-[180px] h-14 text-base">
+                        <div className="flex items-center gap-2">
+                           <Store className="w-4 h-4 text-muted-foreground" />
+                           <SelectValue placeholder="Select a store" />
+                        </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="All">All Stores</SelectItem>
+                        {STORES.map(store => (
+                            <SelectItem key={store.name} value={store.name}>{store.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Button 
+                    type="submit" 
+                    className="h-14" 
+                    disabled={isSearching || !searchTerm.trim()}
+                >
+                    {isSearching ? 'Searching...' : 'Search'}
+                </Button>
+            </div>
         </form>
         
         <div className="grid grid-cols-1 gap-4">
@@ -258,5 +282,3 @@ export default function ShipmentDashboard() {
     </>
   );
 }
-
-    

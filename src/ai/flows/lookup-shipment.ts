@@ -29,11 +29,12 @@ import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
-  return lookupShipmentFlow({ searchTerm: input.sourceStoreOrderId });
+  return lookupShipmentFlow(input);
 }
 
 const DynamicLookupInputSchema = z.object({
   searchTerm: z.string().describe('A generic search term, which can be an Order ID, Customer Name, Item Name, etc.'),
+  storeName: z.string().optional().describe('The specific store to search in.'),
 });
 
 
@@ -65,11 +66,11 @@ async function fetchFromParcelNinja(url: string, storeName: string, creds: Store
 const lookupShipmentFlow = ai.defineFlow(
   {
     name: 'lookupShipmentFlow',
-    inputSchema: DynamicLookupInputSchema,
+    inputSchema: LookupShipmentInputSchema,
     outputSchema: LookupShipmentOutputSchema,
   },
-  async ({ searchTerm }) => {
-    
+  async ({ sourceStoreOrderId, storeName }) => {
+    const searchTerm = sourceStoreOrderId;
     // --- Pass 1: Search Local Cache (Firestore) ---
     console.log(`Starting Pass 1 (Local Cache Search) for "${searchTerm}"...`);
     let foundRecord = await searchFirestoreCache(searchTerm);
@@ -101,14 +102,14 @@ const lookupShipmentFlow = ai.defineFlow(
     const toDateRecent = new Date('2025-12-29');
     const fromDateRecent = new Date(toDateRecent);
     fromDateRecent.setDate(toDateRecent.getDate() - 90);
-    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent);
+    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName);
 
     // --- Pass 3: Historical Live Search (if not found in recent) ---
     if (!foundRecord) {
         console.log(`Not found in recent data. Starting Pass 3 (Historical Live Search) for "${searchTerm}"...`);
         const fromDateHistorical = new Date('2014-01-01');
         const toDateHistorical = new Date('2030-01-01');
-        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical);
+        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical, storeName);
     }
     
     let relatedInbound: Inbound | null = null;
@@ -136,7 +137,7 @@ const lookupShipmentFlow = ai.defineFlow(
     return {
       shipment: null,
       relatedInbound: null,
-      error: 'Record not found in any configured warehouse store or local cache.',
+      error: `Record not found in ${storeName || 'any configured'} warehouse store or local cache.`,
     };
   }
 );
@@ -145,18 +146,25 @@ const lookupShipmentFlow = ai.defineFlow(
 /**
  * Performs the actual live search logic for a given date range.
  */
-async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date): Promise<Shipment | Inbound | null> {
-    const searchPrefix = searchTerm.charAt(0).toUpperCase();
-    const sortedCreds = [...STORES].sort((a, b) => {
-        if (a.prefix === searchPrefix) return -1;
-        if (b.prefix === searchPrefix) return 1;
-        return 0;
-    });
+async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date, storeName?: string): Promise<Shipment | Inbound | null> {
+    
+    let storesToSearch = STORES;
+    if (storeName && storeName !== 'All') {
+        const specificStore = STORES.find(s => s.name === storeName);
+        storesToSearch = specificStore ? [specificStore] : [];
+    } else {
+        const searchPrefix = searchTerm.charAt(0).toUpperCase();
+        storesToSearch = [...STORES].sort((a, b) => {
+            if (a.prefix === searchPrefix) return -1;
+            if (b.prefix === searchPrefix) return 1;
+            return 0;
+        });
+    }
 
     const startDate = format(fromDate, 'yyyyMMdd');
     const endDate = format(toDate, 'yyyyMMdd');
 
-    for (const creds of sortedCreds) {
+    for (const creds of storesToSearch) {
         console.log(`[${creds.name}] Live searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
         
         // 1. Exact ID lookup for Outbounds
