@@ -2,39 +2,27 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
-
-// We will maintain a single instance of the server-side app.
-let serverApp: FirebaseApp;
-let firestore: Firestore;
+import * as admin from 'firebase-admin';
+import { getFirestore as getAdminFirestore, Firestore as AdminFirestore } from 'firebase-admin/firestore';
 
 /**
- * Initializes a server-side Firebase app instance.
- * This is designed to be used by server-side code like Genkit flows.
- * It relies on the environment's service account for authentication,
- * which is the standard practice for Google Cloud environments.
+ * Initializes the Firebase Admin SDK on the server.
+ * This is used by Genkit flows to interact with Firestore with admin privileges.
  */
-function initializeServerApp() {
-  // getApps() checks if an app is already initialized.
-  if (!getApps().some(app => app.name === 'server-app')) {
-    // Initialize a new app with a unique name to avoid conflicts with the client app.
-    serverApp = initializeApp(firebaseConfig, 'server-app');
-  } else {
-    // If it's already initialized, just get the instance.
-    serverApp = getApp('server-app');
-  }
-  // Get the Firestore instance for the named 'shipment-look' database.
-  firestore = getFirestore(serverApp, 'shipment-look');
-}
-
-/**
- * Gets a server-side, authenticated Firestore instance.
- * This function ensures Firebase is initialized and returns the firestore service.
- * It is idempotent and safe to call multiple times.
- */
-export function initializeFirebaseOnServer(): { firestore: Firestore } {
-  // Ensure the app is initialized before returning the firestore instance.
-  if (!firestore) {
-    initializeServerApp();
-  }
-  return { firestore };
+export function initializeFirebaseOnServer(): { firestore: AdminFirestore } {
+    if (admin.apps.length === 0) {
+         try {
+            admin.initializeApp();
+         } catch (error: any) {
+             console.error('Firebase Admin SDK initialization failed:', error.message);
+             // Re-throwing the error to make it clear that the server cannot proceed
+            // without successful initialization.
+            throw new Error('Could not initialize Firebase Admin SDK. Ensure server environment is configured with appropriate credentials.');
+         }
+    }
+  
+  // Pass databaseId as a string to getFirestore
+  return {
+    firestore: getAdminFirestore('shipment-look'),
+  };
 }
