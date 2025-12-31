@@ -23,6 +23,7 @@ type ConnectionTestResult = z.infer<typeof ConnectionTestResultSchema>;
 const TestConnectionOutputSchema = z.object({
   results: z.array(ConnectionTestResultSchema),
   logs: z.array(z.string()),
+  error: z.string().optional(), // Added optional error field to top-level output
 });
 export type TestConnectionOutput = z.infer<typeof TestConnectionOutputSchema>;
 
