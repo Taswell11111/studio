@@ -32,12 +32,6 @@ export async function lookupShipment(input: LookupShipmentInput): Promise<Lookup
   return lookupShipmentFlow(input);
 }
 
-const DynamicLookupInputSchema = z.object({
-  searchTerm: z.string().describe('A generic search term, which can be an Order ID, Customer Name, Item Name, etc.'),
-  storeName: z.string().optional().describe('The specific store to search in.'),
-});
-
-
 const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
 
 async function fetchFromParcelNinja(url: string, storeName: string, creds: Store, extraHeaders = {}) {
