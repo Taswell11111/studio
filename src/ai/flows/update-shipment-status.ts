@@ -81,7 +81,7 @@ const updateShipmentStatusFlow = ai.defineFlow(
       }
 
       // Update the document in Firestore
-      const { firestore } = initializeFirebaseOnServer();
+      const { firestore } = await initializeFirebaseOnServer();
       const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
       const shipmentRef = firestore.collection(`artifacts/${appId}/public/data/shipments`).doc(shipmentId);
       
