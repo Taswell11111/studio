@@ -7,14 +7,6 @@ buildCommand: npm run build
 outputDirectory: .next
 startCommand: npm start
 
-env:
-  - name: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: shipment-5b687
-  - name: NEXT_PUBLIC_APP_ID
-    value: 1:269674227376:web:bea1d2089e1f2368363d75
-  - name: NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY
-    value: 6LcNnycsAAAAACR2VukEvlvBgPDxVZEJKGCLgeKD
-
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
@@ -36,3 +28,4 @@ runConfig:
   #   - REEBOK_WAREHOUSE_API_USERNAME
   #   - REEBOK_WAREHOUSE_API_PASSWORD
   #   - REEBOK_WAREHOUSE_STORE_ID
+  #   - NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY
