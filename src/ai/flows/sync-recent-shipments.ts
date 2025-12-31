@@ -66,6 +66,14 @@ const syncRecentShipmentsFlow = ai.defineFlow(
   async ({ days }) => {
     const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+    
+    // In firebase-admin (server SDK), the method is just 'collection', not 'collection' on the object like in client SDK v9 sometimes.
+    // The issue "Property 'collection' does not exist on type 'Firestore'" suggests that 'firestore' might be typed incorrectly 
+    // or the 'firebase-admin/firestore' types are clashing with 'firebase/firestore' (client SDK).
+    
+    // 'initializeFirebaseOnServer' returns an object with 'firestore' property which is of type 'Firestore' from 'firebase-admin/firestore' (per our fix in server-init.ts).
+    // Let's ensure the type is correctly recognized.
+    
     const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
     const inboundsColRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
