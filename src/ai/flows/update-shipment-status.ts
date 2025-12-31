@@ -1,13 +1,13 @@
 
 'use server';
+import { config } from 'dotenv';
+config();
 
 /**
  * @fileOverview A Genkit flow to update a shipment's status from an external warehouse API.
  *
  * - updateShipmentStatus - a function that fetches the latest status and updates Firestore.
  */
-import { config } from 'dotenv';
-config();
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
@@ -18,6 +18,7 @@ import {
   type UpdateShipmentStatusOutput,
 } from '@/types';
 import { STORES } from '@/lib/stores';
+import { doc, updateDoc } from 'firebase/firestore';
 
 // Main exported function that the client will call
 export async function updateShipmentStatus(input: UpdateShipmentStatusInput): Promise<UpdateShipmentStatusOutput> {
@@ -83,9 +84,9 @@ const updateShipmentStatusFlow = ai.defineFlow(
       // Update the document in Firestore
       const { firestore } = await initializeFirebaseOnServer();
       const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-      const shipmentRef = firestore.collection(`artifacts/${appId}/public/data/shipments`).doc(shipmentId);
+      const shipmentDocRef = doc(firestore, `artifacts/${appId}/public/data/shipments`, shipmentId);
       
-      await shipmentRef.update({
+      await updateDoc(shipmentDocRef, {
         'Status': newStatus,
         'Status Date': new Date().toISOString(),
         'updatedAt': new Date(), // Important for the "last 3 days" query
@@ -106,3 +107,5 @@ const updateShipmentStatusFlow = ai.defineFlow(
     }
   }
 );
+
+    

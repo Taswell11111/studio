@@ -1,13 +1,13 @@
 
 'use server';
+import { config } from 'dotenv';
+config();
 
 /**
  * @fileOverview A Genkit flow to sync recent inbound and outbound shipments from the Parcelninja API.
  * It fetches records updated in the last X days, compares them with Firestore,
  * and either updates existing records or creates new ones.
  */
-import { config } from 'dotenv';
-config();
 
 import { ai } from '@/ai/genkit';
 import { initializeFirebaseOnServer } from '@/firebase/server-init';
@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { format } from 'date-fns';
 import type { Inbound, Shipment } from '@/types';
 import { STORES, type Store } from '@/lib/stores';
+import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // --- INPUT/OUTPUT SCHEMAS ---
 
@@ -49,8 +50,8 @@ const syncRecentShipmentsFlow = ai.defineFlow(
   async ({ days, fromDate, toDate }) => {
     const { firestore } = await initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-    const shipmentsColRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
-    const inboundsColRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
+    const shipmentsColRef = collection(firestore, `artifacts/${appId}/public/data/shipments`);
+    const inboundsColRef = collection(firestore, `artifacts/${appId}/public/data/inbounds`);
 
     let totalCreated = 0;
     let totalUpdated = 0;
@@ -183,15 +184,15 @@ async function processEndpoint(creds: Store, endpoint: 'inbounds' | 'outbounds',
 
             if (!docId) return;
 
-            const docRef = collectionRef.doc(docId);
-            const docSnap = await docRef.get();
+            const docRef = doc(collectionRef, docId);
+            const docSnap = await getDoc(docRef);
             
 
-            if (docSnap.exists) {
-                await docRef.set(mappedRecord, { merge: true });
+            if (docSnap.exists()) {
+                await setDoc(docRef, mappedRecord, { merge: true });
                 updated++;
             } else {
-                await docRef.set(mappedRecord);
+                await setDoc(docRef, mappedRecord);
                 created++;
             }
         });
@@ -223,3 +224,5 @@ async function fetchFromParcelNinja(creds: Store, endpoint: 'inbounds' | 'outbou
     }
     return response.json();
 }
+
+    
