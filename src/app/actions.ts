@@ -3,7 +3,7 @@
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
-import { streamFlow } from '@genkit-ai/flow/experimental';
+import { streamFlow } from '@genkit-ai/next/server';
 import type { ConnectionTestStreamChunk } from '@/types';
 
 /**
