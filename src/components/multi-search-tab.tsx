@@ -175,13 +175,16 @@ export function MultiSearchTab() {
             onChange={(e) => setSearchTerms(e.target.value)}
           />
            <Alert>
-            <Info className="h-4 w-4" />
-            <AlertTitle>Search Reference Guide</AlertTitle>
-            <AlertDescription>
-                You can search by Order ID, Channel ID, Customer Name, or Tracking Number.
-                <br />
-                e.g., `SHP-12345`, `Channel1`, `John Doe`, `PNJ54321`
-            </AlertDescription>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Search Reference Guide</AlertTitle>
+                <AlertDescription>
+                    <ul className="list-disc pl-5 space-y-1 mt-2">
+                        <li><b>Order ID:</b> The unique identifier for a shipment. e.g., `SHP-12345` or `RET-54321`</li>
+                        <li><b>Channel ID:</b> The ID from the originating sales channel. e.g., `H10598`, `D23455`</li>
+                        <li><b>Customer Name:</b> The full name of the customer. e.g., `John Doe`</li>
+                        <li><b>Tracking Number:</b> The courier's tracking number. e.g., `PNJ12345678`</li>
+                    </ul>
+                </AlertDescription>
             </Alert>
 
           <div className="flex justify-end gap-2">
