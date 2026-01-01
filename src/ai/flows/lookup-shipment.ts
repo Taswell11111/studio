@@ -167,8 +167,8 @@ async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Dat
         data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
         if (data && data.id) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
         
-        // 3. General search for Outbounds
-        const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
+        // 3. General search for Outbounds (including by Channel ID)
+        const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}&channelId=${encodeURIComponent(searchTerm)}`;
         data = await fetchFromParcelNinja(outboundSearchUrl, creds.name, creds);
         if (data && data.outbounds && data.outbounds.length > 0) {
             const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}/events`;
