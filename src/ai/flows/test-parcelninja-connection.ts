@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview A Genkit flow to test the API connection to Parcelninja for all configured stores.
- * This flow now STREAMS results back to the client.
+ * This flow executes synchronously and returns the full result, as streaming is causing build issues with ai.defineFlow types.
  */
 import { config } from 'dotenv';
 config();
@@ -11,23 +11,35 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { STORES } from '@/lib/stores';
-import { ConnectionTestStreamChunkSchema } from '@/types';
 
+const TestResultSchema = z.object({
+  storeName: z.string(),
+  success: z.boolean(),
+  error: z.string().optional(),
+});
+
+const ConnectionTestOutputSchema = z.object({
+  results: z.array(TestResultSchema),
+  logs: z.array(z.string()),
+  error: z.string().optional(),
+});
 
 // --- GENKIT FLOW ---
 
 export const testParcelninjaConnectionFlow = ai.defineFlow(
   {
     name: 'testParcelninjaConnectionFlow',
-    outputSchema: ConnectionTestStreamChunkSchema, // Each chunk validates against this
+    outputSchema: ConnectionTestOutputSchema,
   },
-  async function* () {
-    // The flow itself is an async generator.
+  async () => {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     const startDate = format(yesterday, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
+
+    const logs: string[] = [];
+    const results: any[] = [];
 
     const logWithTimestamp = (message: string) => {
       const timestamp = new Date().toLocaleTimeString();
@@ -35,32 +47,19 @@ export const testParcelninjaConnectionFlow = ai.defineFlow(
     };
 
     for (const creds of STORES) {
-      const startLog = logWithTimestamp(
-        `[Connection Test] Testing store: ${creds.name}`
-      );
-      yield { log: startLog }; // Stream the log message
+      logs.push(logWithTimestamp(`[Connection Test] Testing store: ${creds.name}`));
 
       if (!creds.apiKey || !creds.apiSecret) {
         const errorMsg = 'Missing API Key or Secret in store configuration.';
-        const failureLog = logWithTimestamp(
-          `[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`
-        );
-        yield { log: failureLog }; // Stream the log
-        yield {
-          result: { storeName: creds.name, success: false, error: errorMsg },
-        }; // Stream the final result for this store
+        logs.push(logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`));
+        results.push({ storeName: creds.name, success: false, error: errorMsg });
         continue;
       }
 
       const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
-      const basicAuth = Buffer.from(
-        `${creds.apiKey}:${creds.apiSecret}`
-      ).toString('base64');
+      const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
 
-      const requestLog = logWithTimestamp(
-        `[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`
-      );
-      yield { log: requestLog };
+      logs.push(logWithTimestamp(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`));
 
       try {
         const response = await fetch(url, {
@@ -68,17 +67,11 @@ export const testParcelninjaConnectionFlow = ai.defineFlow(
           headers: { Authorization: `Basic ${basicAuth}` },
         });
 
-        const responseLog = logWithTimestamp(
-          `[Connection Test] ⬅️ ${creds.name}: Received status ${response.status}`
-        );
-        yield { log: responseLog };
+        logs.push(logWithTimestamp(`[Connection Test] ⬅️ ${creds.name}: Received status ${response.status}`));
 
         if (response.ok) {
-          const successLog = logWithTimestamp(
-            `[Connection Test] ✅ ${creds.name}: SUCCESS`
-          );
-          yield { log: successLog };
-          yield { result: { storeName: creds.name, success: true } };
+          logs.push(logWithTimestamp(`[Connection Test] ✅ ${creds.name}: SUCCESS`));
+          results.push({ storeName: creds.name, success: true });
         } else {
           let errorMessage = `API returned status ${response.status}.`;
           if (response.status === 401) {
@@ -89,32 +82,21 @@ export const testParcelninjaConnectionFlow = ai.defineFlow(
               errorMessage += ` Body: ${errorBody.substring(0, 150)}`;
             } catch (e) {}
           }
-          const failureLog = logWithTimestamp(
-            `[Connection Test] ❌ ${creds.name}: FAILED - ${errorMessage}`
-          );
-          yield { log: failureLog };
-          yield {
-            result: {
-              storeName: creds.name,
-              success: false,
-              error: errorMessage,
-            },
-          };
+          logs.push(logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMessage}`));
+          results.push({ storeName: creds.name, success: false, error: errorMessage });
         }
       } catch (err: any) {
         const networkError = err.message || 'A network error occurred.';
-        const errorLog = logWithTimestamp(
-          `[Connection Test] ❌ ${creds.name}: FAILED - ${networkError}`
-        );
-        yield { log: errorLog };
-        yield {
-          result: {
-            storeName: creds.name,
-            success: false,
-            error: networkError,
-          },
-        };
+        logs.push(logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${networkError}`));
+        results.push({ storeName: creds.name, success: false, error: networkError });
       }
     }
+
+    return { results, logs };
   }
 );
+
+// Helper for calling directly if needed (bypassing Genkit flow for server actions if flow invocation is tricky)
+export async function testParcelninjaConnection() {
+     return await testParcelninjaConnectionFlow();
+}

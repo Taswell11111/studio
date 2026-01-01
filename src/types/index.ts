@@ -2,36 +2,44 @@
 import { z } from 'zod';
 
 // A single item within a shipment
-export type ShipmentItem = {
-  'Item Name': string;
-  'Quantity': number;
-  [key: string]: any;
-};
+export const ShipmentItemSchema = z.object({
+  'Item Name': z.string(),
+  'Quantity': z.number(),
+  'SKU': z.string().optional(),
+});
+export type ShipmentItem = z.infer<typeof ShipmentItemSchema>;
+
 
 // Represents a record from the unified CSV file.
 // Can be either an outbound shipment or an inbound return.
-export type ShipmentRecord = {
-  id: string; // Document ID, from 'Shipment ID'
-  'Direction': 'Outbound' | 'Inbound' | string;
-  'Shipment ID': string;
-  'Source Store'?: string;
-  'Source Store Order ID'?: string;
-  'Order Date'?: string;
-  'Courier'?: string;
-  'Status'?: string;
-  'Status Date'?: string;
-  'Customer Type'?: string;
-  'Customer Name'?: string;
-  'Address Line 1'?: string;
-  'Address Line 2'?: string;
-  'City'?: string;
-  'Region'?: string;
-  'State'?: string;
-  'Country'?: string;
-  'Pin Code'?: string;
-  items?: ShipmentItem[];
-  [key: string]: any;
-};
+export const ShipmentRecordSchema = z.object({
+  id: z.string(), // Document ID, from 'Shipment ID'
+  'Direction': z.enum(['Outbound', 'Inbound']),
+  'Shipment ID': z.string(),
+  'Source Store': z.string().optional(),
+  'Source Store Order ID': z.string().optional(),
+  'Order Date': z.string().optional(),
+  'Courier': z.string().optional(),
+  'Status': z.string().optional(),
+  'Status Date': z.string().optional(),
+  'Customer Type': z.string().optional(),
+  'Customer Name': z.string().optional(),
+  'Address Line 1': z.string().optional(),
+  'Address Line 2': z.string().optional(),
+  'City': z.string().optional(),
+  'Region': z.string().optional(),
+  'State': z.string().optional(),
+  'Country': z.string().optional(),
+  'Pin Code': z.string().optional(),
+  'items': z.array(ShipmentItemSchema).optional(),
+  'Tracking No': z.string().optional(),
+  'Tracking Link': z.string().optional(),
+  'Email': z.string().optional(),
+  'Channel ID': z.string().optional(),
+}).catchall(z.any());
+
+export type ShipmentRecord = z.infer<typeof ShipmentRecordSchema>;
+
 
 // Type alias for clarity in the code. Represents an outbound shipment.
 export type Shipment = ShipmentRecord;
@@ -101,6 +109,20 @@ export const LookupShipmentOutputSchema = z.object({
 });
 export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 
+// Schema for multi-shipment lookup flow
+export const MultiLookupShipmentInputSchema = z.object({
+  searchTerms: z.array(z.string()).describe('An array of search terms (e.g., order IDs).'),
+});
+export type MultiLookupShipmentInput = z.infer<typeof MultiLookupShipmentInputSchema>;
+
+export const MultiLookupShipmentOutputSchema = z.object({
+  results: z.array(ShipmentRecordSchema),
+  notFound: z.array(z.string()),
+  error: z.string().optional(),
+});
+export type MultiLookupShipmentOutput = z.infer<typeof MultiLookupShipmentOutputSchema>;
+
+
 // Schema for connection test streaming flow
 export const ConnectionTestStreamChunkSchema = z.object({
   log: z.string().optional(),
@@ -113,5 +135,3 @@ export const ConnectionTestStreamChunkSchema = z.object({
     .optional(),
 });
 export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
-    
-

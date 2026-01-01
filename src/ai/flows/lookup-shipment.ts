@@ -24,9 +24,6 @@ import {
 } from '@/types';
 import { format } from 'date-fns';
 import { STORES, type Store } from '@/lib/stores';
-// Import modular functions from the client SDK for server-side use
-import { collection, doc, getDoc, getDocs, query, where, setDoc } from 'firebase/firestore';
-
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
@@ -196,16 +193,16 @@ async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Dat
  */
 async function saveRecordToFirestore(record: Shipment | Inbound) {
   try {
-    const { firestore } = await initializeFirebaseOnServer();
+    const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
     const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
     const docId = String(record.id);
     
-    const collectionRef = collection(firestore, `artifacts/${appId}/public/data/${collectionName}`);
-    const docRef = doc(collectionRef, docId);
+    // Using admin SDK methods, no need to import collection/doc from client SDK
+    const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
     
     const dataToSave = { ...record, updatedAt: new Date().toISOString() };
-    await setDoc(docRef, dataToSave, { merge: true });
+    await docRef.set(dataToSave, { merge: true });
     
     console.log(`Saved/Updated record ${docId} in Firestore at path: ${docRef.path}.`);
   } catch (dbError: any) {
@@ -217,33 +214,33 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
  * Searches the Firestore database for a matching record.
  */
 async function searchFirestoreDatabase(searchTerm: string): Promise<Shipment | Inbound | null> {
-    const { firestore } = await initializeFirebaseOnServer();
+    const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
-    const shipmentsCol = collection(firestore, `artifacts/${appId}/public/data/shipments`);
-    const inboundsCol = collection(firestore, `artifacts/${appId}/public/data/inbounds`);
+    const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
+    const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
     // Try to get by document ID first
-    const shipmentDocRef = doc(shipmentsCol, searchTerm);
-    const shipmentSnap = await getDoc(shipmentDocRef);
-    if(shipmentSnap.exists()) return { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment;
+    const shipmentDocRef = shipmentsRef.doc(searchTerm);
+    const shipmentSnap = await shipmentDocRef.get();
+    if(shipmentSnap.exists) return { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment;
 
-    const inboundDocRef = doc(inboundsCol, searchTerm);
-    const inboundSnap = await getDoc(inboundDocRef);
-    if(inboundSnap.exists()) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
+    const inboundDocRef = inboundsRef.doc(searchTerm);
+    const inboundSnap = await inboundDocRef.get();
+    if(inboundSnap.exists) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
     
     // Fallback to querying fields if not found by ID
     const fieldsToSearch = ['Source Store Order ID', 'Channel ID', 'Customer Name', 'Tracking No'];
     for (const field of fieldsToSearch) {
-        const shipmentQuery = query(shipmentsCol, where(field, '==', searchTerm));
-        const shipmentQuerySnap = await getDocs(shipmentQuery);
+        const shipmentQuery = shipmentsRef.where(field, '==', searchTerm);
+        const shipmentQuerySnap = await shipmentQuery.get();
         if(!shipmentQuerySnap.empty) {
             const doc = shipmentQuerySnap.docs[0];
             return { id: doc.id, ...doc.data() } as Shipment;
         }
 
-        const inboundQuery = query(inboundsCol, where(field, '==', searchTerm));
-        const inboundQuerySnap = await getDocs(inboundQuery);
+        const inboundQuery = inboundsRef.where(field, '==', searchTerm);
+        const inboundQuerySnap = await inboundQuery.get();
         if(!inboundQuerySnap.empty) {
             const doc = inboundQuerySnap.docs[0];
             return { id: doc.id, ...doc.data() } as Inbound;
@@ -311,5 +308,3 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
-
-    

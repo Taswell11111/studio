@@ -2,53 +2,23 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
-import type { Shipment, Inbound, ConnectionTestStreamChunk } from '@/types';
-import { lookupShipment } from '@/ai/flows/lookup-shipment';
-import { testConnectionsAction } from '@/app/actions';
+import type { Shipment, Inbound } from '@/types';
 import { initializeFirebase } from '@/firebase';
 import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
-import { STORES } from '@/lib/stores';
 
-import { Search, CloudLightning, AlertCircle, Wifi, Database, Store } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { CloudLightning, Database } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { ShipmentCard } from '@/components/shipment-card';
 import { ProcessingModal } from '@/components/processing-modal';
-import { useToast } from '@/hooks/use-toast';
 import { RefreshAllButton } from './refresh-all-button';
-import { InboundCard } from './inbound-card';
-import { LogViewer } from './log-viewer';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-
-type SearchResult = {
-    shipment: Shipment | Inbound | null;
-    relatedInbound?: Inbound | null;
-};
-
-type TestResult = {
-    storeName: string;
-    success: boolean;
-    error?: string;
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SingleSearchTab } from './single-search-tab';
+import { MultiSearchTab } from './multi-search-tab';
 
 export default function ShipmentDashboard() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStore, setSelectedStore] = useState('All');
-  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
-  const [isSearching, startSearchTransition] = useTransition();
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTitle, setProcessingTitle] = useState('');
-  const [isTesting, startTestTransition] = useTransition();
-  const [logs, setLogs] = useState<string[]>([]);
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [lastSearchedTerm, setLastSearchedTerm] = useState('');
   const [recordsCount, setRecordsCount] = useState<number | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
-
-
-  const { toast } = useToast();
 
   useEffect(() => {
     async function fetchStats() {
@@ -74,121 +44,9 @@ export default function ShipmentDashboard() {
     fetchStats();
   }, []);
 
-  const handleSearch = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const trimmedSearch = searchTerm.trim();
-    if (!trimmedSearch) return;
-    
-    setLastSearchedTerm(trimmedSearch);
-
-    startSearchTransition(async () => {
-      setSearchResult(null); // Clear previous result
-      try {
-        const result = await lookupShipment({ 
-            sourceStoreOrderId: trimmedSearch,
-            storeName: selectedStore === 'All' ? undefined : selectedStore,
-        });
-        
-        if (result.shipment) {
-          setSearchResult({ shipment: result.shipment, relatedInbound: result.relatedInbound });
-          toast({
-            title: "Record Found",
-            description: `Displaying record matching "${trimmedSearch}"`,
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Not Found",
-            description: result.error || `Could not find any record matching "${trimmedSearch}".`,
-          });
-        }
-      } catch (err: any) {
-        console.error("Search error:", err);
-        toast({
-          variant: "destructive",
-          title: "Search Error",
-          description: "An unexpected error occurred while searching.",
-        });
-      }
-    });
-  };
-
-  const handleTestConnections = () => {
-    startTestTransition(async () => {
-      setLogs([]); 
-      setTestResults([]);
-      toast({ title: 'Testing Connections...', description: 'Pinging all configured warehouse APIs.' });
-
-      try {
-        const stream = await testConnectionsAction();
-        const reader = stream.getReader();
-        const decoder = new TextDecoder();
-        
-        let finalResults: TestResult[] = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = JSON.parse(decoder.decode(value)) as ConnectionTestStreamChunk;
-          
-          if (chunk.log) {
-            setLogs(prev => [...prev, chunk.log!]);
-          }
-          if (chunk.result) {
-            finalResults.push(chunk.result);
-          }
-        }
-        
-        setTestResults(finalResults);
-
-        const successCount = finalResults.filter(r => r.success).length;
-
-        if (successCount === finalResults.length) {
-          toast({ title: 'All Connections Successful', description: 'All warehouse APIs are responding correctly.' });
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Some Connections Failed',
-            description: `${finalResults.length - successCount} of ${finalResults.length} connections failed. See logs for details.`,
-          });
-        }
-
-      } catch (error: any) {
-         toast({ variant: 'destructive', title: 'Test Failed', description: error.message || 'An unknown error occurred during the test.' });
-         console.error(error);
-      }
-    });
-  };
-
-
-  const DisplayCard = () => {
-      if (!searchResult || !searchResult.shipment) return null;
-      
-      const primaryRecord = searchResult.shipment;
-      const relatedRecord = searchResult.relatedInbound;
-
-      return (
-        <div>
-            {primaryRecord.Direction === 'Inbound' ? (
-                <InboundCard item={primaryRecord as Inbound} />
-            ) : (
-                <ShipmentCard item={primaryRecord as Shipment} relatedInbound={relatedRecord} />
-            )}
-
-            {relatedRecord && (
-                <div className="mt-6">
-                    <h3 className="text-lg font-semibold mb-2 text-center text-muted-foreground">Related Inbound Return</h3>
-                    <InboundCard item={relatedRecord} isRelated={true} />
-                </div>
-            )}
-        </div>
-      );
-  }
-
   return (
     <>
-      <ProcessingModal isOpen={isSearching || isProcessing} title={isSearching ? "Searching Warehouses..." : processingTitle} />
+      <ProcessingModal isOpen={isProcessing} title={processingTitle} />
       
       <div className="max-w-7xl mx-auto space-y-6">
         <Card className="p-4 sm:p-6">
@@ -215,76 +73,29 @@ export default function ShipmentDashboard() {
                         {lastSyncDate && <span>Latest: {lastSyncDate}</span>}
                     </div>
                 )}
-              <Button onClick={handleTestConnections} disabled={isTesting} variant="outline" size="sm">
-                  <Wifi className={`mr-2 h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
-                  {isTesting ? 'Testing...' : 'Test Connections'}
-              </Button>
+              
+               <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/20 rounded-full border border-secondary/20" title="System Online">
+                   <div className="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                   <span className="text-xs font-medium text-muted-foreground">Online</span>
+               </div>
+
               <RefreshAllButton />
             </div>
           </div>
         </Card>
 
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-grow">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                    type="text"
-                    className="w-full pl-11 pr-4 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
-                    placeholder="Search by Order ID, Customer Name, Item..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-            <div className="flex gap-2">
-                <Select value={selectedStore} onValueChange={setSelectedStore}>
-                    <SelectTrigger className="w-full sm:w-[180px] h-14 text-base">
-                        <div className="flex items-center gap-2">
-                           <Store className="w-4 h-4 text-muted-foreground" />
-                           <SelectValue placeholder="Select a store" />
-                        </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="All">All Stores</SelectItem>
-                        {STORES.map(store => (
-                            <SelectItem key={store.name} value={store.name}>{store.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Button 
-                    type="submit" 
-                    className="h-14" 
-                    disabled={isSearching || !searchTerm.trim()}
-                >
-                    {isSearching ? 'Searching...' : 'Search'}
-                </Button>
-            </div>
-        </form>
-        
-        <div className="grid grid-cols-1 gap-4">
-          {searchResult ? (
-            <DisplayCard />
-          ) : (
-             isSearching ? (
-                <div className="text-center py-12 text-muted-foreground">
-                    <p>Searching for "{lastSearchedTerm}"...</p>
-                </div>
-             ) : lastSearchedTerm && (
-                <div className="text-center py-12 text-muted-foreground">
-                    <p>No results to display for "{lastSearchedTerm}".</p>
-                </div>
-             )
-          )}
-          
-          {!searchResult && !lastSearchedTerm && !isSearching && (
-            <Card className="text-center py-12 text-muted-foreground border-dashed bg-secondary/10">
-              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>Enter an Order ID, Customer Name, or Item Name to check its status.</p>
-            </Card>
-          )}
-        </div>
-
-        {logs.length > 0 && <LogViewer logs={logs} title="Connection Test Logs" />}
-
+        <Tabs defaultValue="single-search" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="single-search">Single Search</TabsTrigger>
+                <TabsTrigger value="multi-search">Multi-Search</TabsTrigger>
+            </TabsList>
+            <TabsContent value="single-search">
+                <SingleSearchTab />
+            </TabsContent>
+            <TabsContent value="multi-search">
+                <MultiSearchTab />
+            </TabsContent>
+        </Tabs>
       </div>
     </>
   );

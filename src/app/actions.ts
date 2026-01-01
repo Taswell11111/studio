@@ -2,9 +2,10 @@
 'use server';
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
-import { testParcelninjaConnectionFlow } from '@/ai/flows/test-parcelninja-connection';
-import type { ConnectionTestStreamChunk } from '@/types';
-import { ai } from '@/ai/genkit';
+import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
+import { multiLookupShipment } from '@/ai/flows/multi-lookup-shipment';
+import type { MultiLookupShipmentInput, MultiLookupShipmentOutput } from '@/types';
+
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
@@ -49,23 +50,34 @@ export async function refreshAllShipmentsAction() {
 
 /**
  * Server action to test the connection to the Parcelninja API for all configured stores.
- * This now uses a ReadableStream to send logs back to the client in real-time.
  */
-export async function testConnectionsAction(): Promise<ReadableStream<ConnectionTestStreamChunk>> {
-    // Correctly get the async generator stream by calling ai.runFlow
-    const flowStream = ai.runFlow(testParcelninjaConnectionFlow, undefined);
-    
-    const encoder = new TextEncoder();
+export async function testConnectionsAction() {
+  try {
+    const result = await testParcelninjaConnection();
+    // Return the result directly as it matches the expected structure.
+    return result; 
+  } catch (error: any) {
+    console.error("Critical error in testConnectionsAction:", error);
+    return {
+      results: [],
+      logs: ['A critical error occurred during connection test.'],
+      error: error.message || 'An unknown server error occurred during connection test.',
+    }
+  }
+}
 
-    const stream = new ReadableStream({
-      async pull(controller) {
-        // Iterate over the stream from ai.runFlow
-        for await (const value of flowStream) {
-          controller.enqueue(encoder.encode(JSON.stringify(value)));
-        }
-        controller.close();
-      },
-    });
-
-    return stream;
+/**
+ * Server action to perform a multi-shipment lookup.
+ */
+export async function multiLookupShipmentAction(input: MultiLookupShipmentInput): Promise<MultiLookupShipmentOutput> {
+    try {
+        return await multiLookupShipment(input);
+    } catch (error: any) {
+        console.error("Critical error in multiLookupShipmentAction:", error);
+        return {
+            results: [],
+            notFound: input.searchTerms,
+            error: error.message || 'An unknown server error occurred.',
+        };
+    }
 }

@@ -5,7 +5,7 @@ import React, { useState, useTransition } from 'react';
 import type { Inbound, Shipment, ShipmentItem } from '@/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
-import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, Hash, MapPin, ShoppingBag, ClipboardList, Building, Mail, Layers, ArchiveRestore } from 'lucide-react';
+import { User, Calendar, Truck, Activity, Link as LinkIcon, RefreshCw, Package, Info, MapPin, Building, Mail, Layers, ArchiveRestore } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { updateShipmentStatus } from '@/ai/flows/update-shipment-status';
@@ -117,6 +117,8 @@ export function ShipmentCard({ item, relatedInbound }: ShipmentCardProps) {
 
   const searchTime = new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short'});
 
+  const shipmentIdHref = `https://sellerportal.dpworld.com/orders/shipments/${item['Shipment ID']}`;
+
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 animate-in fade-in slide-in-from-bottom-2">
       <CardHeader className="bg-secondary/50 p-6">
@@ -133,7 +135,9 @@ export function ShipmentCard({ item, relatedInbound }: ShipmentCardProps) {
                         {item['Source Store']}
                     </p>
                 </div>
-                <h2 className="font-mono font-bold text-2xl text-primary mt-2">{item['Shipment ID']}</h2>
+                <a href={shipmentIdHref} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-2xl text-primary mt-2 hover:underline">
+                    {item['Shipment ID']}
+                </a>
                 {relatedInbound && (
                     <div className="mt-2 flex items-center gap-2 text-amber-700 font-semibold text-xs py-1 px-2 bg-amber-100 rounded-md">
                         <ArchiveRestore className="w-4 h-4" />
@@ -239,5 +243,3 @@ export function ShipmentCard({ item, relatedInbound }: ShipmentCardProps) {
     </Card>
   );
 }
-
-    
