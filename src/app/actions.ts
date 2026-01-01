@@ -3,7 +3,6 @@
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
-import { streamFlow } from '@genkit-ai/next/server';
 import type { ConnectionTestStreamChunk } from '@/types';
 
 /**
@@ -49,9 +48,22 @@ export async function refreshAllShipmentsAction() {
 
 /**
  * Server action to test the connection to the Parcelninja API for all configured stores.
- * This now uses experimental streaming to send logs back to the client in real-time.
+ * This now uses a ReadableStream to send logs back to the client in real-time.
  */
 export async function testConnectionsAction(): Promise<ReadableStream<ConnectionTestStreamChunk>> {
-    const stream = await streamFlow(testParcelninjaConnection, []);
+    const flowGenerator = testParcelninjaConnection();
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async pull(controller) {
+        const { value, done } = await flowGenerator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(encoder.encode(JSON.stringify(value)));
+        }
+      },
+    });
+
     return stream;
 }
