@@ -5,17 +5,24 @@ import React, { useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { multiLookupShipmentAction } from '@/app/actions';
 import { ShipmentRecord } from '@/types';
+import { STORES } from '@/lib/stores';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from './status-badge';
-import { AlertCircle, Search, Download, CircleDotDashed } from 'lucide-react';
+import { AlertCircle, Search, Download, CircleDotDashed, Info, Store, X } from 'lucide-react';
 import { ProcessingModal } from './processing-modal';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export function MultiSearchTab() {
   const [searchTerms, setSearchTerms] = useState('');
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [results, setResults] = useState<ShipmentRecord[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);
   const [isSearching, startSearchTransition] = useTransition();
@@ -40,12 +47,15 @@ export function MultiSearchTab() {
       setResults([]);
       setNotFound([]);
       try {
-        const response = await multiLookupShipmentAction({ searchTerms: terms });
+        const response = await multiLookupShipmentAction({ 
+          searchTerms: terms,
+          storeNames: selectedStores 
+        });
         setResults(response.results);
         setNotFound(response.notFound);
         toast({
           title: 'Search Complete',
-          description: `Found ${response.results.length} of ${terms.length} records.`,
+          description: `Found ${response.results.length} unique records for ${terms.length} terms.`,
         });
       } catch (error: any) {
         toast({
@@ -60,11 +70,13 @@ export function MultiSearchTab() {
   const exportToCsv = () => {
     if (results.length === 0) return;
 
-    const headers = ['Shipment ID', 'Customer Name', 'Order Date', 'Status', 'Courier', 'Tracking No'];
+    const headers = ['Shipment ID', 'Direction', 'Source Store', 'Customer Name', 'Order Date', 'Status', 'Courier', 'Tracking No'];
     const csvContent = [
       headers.join(','),
       ...results.map(item => [
         `"${item['Shipment ID']}"`,
+        `"${item['Direction']}"`,
+        `"${item['Source Store']}"`,
         `"${item['Customer Name']}"`,
         `"${item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'}"`,
         `"${item['Status']}"`,
@@ -91,12 +103,87 @@ export function MultiSearchTab() {
       <ProcessingModal isOpen={isSearching} title="Performing Multi-Search..." description="This may take a moment." />
       <Card className="p-4 sm:p-6 mt-6">
         <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-2">
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="lg"
+                        className="w-full sm:w-auto justify-start text-left font-normal"
+                    >
+                        <Store className="mr-2 h-4 w-4" />
+                        {selectedStores.length > 0 ? `Selected Stores (${selectedStores.length})` : 'All Stores'}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                    <Command>
+                        <CommandInput placeholder="Filter stores..." />
+                        <CommandList>
+                        <CommandEmpty>No results found.</CommandEmpty>
+                        <CommandGroup>
+                            {STORES.map((store) => {
+                                const isSelected = selectedStores.includes(store.name);
+                                return (
+                                    <CommandItem
+                                        key={store.name}
+                                        onSelect={() => {
+                                            if (isSelected) {
+                                                setSelectedStores(selectedStores.filter((s) => s !== store.name));
+                                            } else {
+                                                setSelectedStores([...selectedStores, store.name]);
+                                            }
+                                        }}
+                                    >
+                                    <div
+                                        className={cn(
+                                        'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+                                        isSelected
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'opacity-50 [&_svg]:invisible'
+                                        )}
+                                    >
+                                        <Check className={cn('h-4 w-4')} />
+                                    </div>
+                                    <span>{store.name}</span>
+                                    </CommandItem>
+                                );
+                            })}
+                        </CommandGroup>
+                        </CommandList>
+                    </Command>
+                    </PopoverContent>
+                </Popover>
+
+                {selectedStores.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                        {selectedStores.map(store => (
+                            <Badge key={store} variant="secondary" className="gap-1">
+                                {store}
+                                <button onClick={() => setSelectedStores(selectedStores.filter(s => s !== store))}>
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        ))}
+                    </div>
+                )}
+            </div>
+            
           <Textarea
             placeholder="Enter comma or newline separated search terms..."
             className="h-32 text-base"
             value={searchTerms}
             onChange={(e) => setSearchTerms(e.target.value)}
           />
+           <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Search Reference Guide</AlertTitle>
+            <AlertDescription>
+                You can search by Order ID, Customer Name, or Tracking Number.
+                <br />
+                e.g., `SHP-12345`, `John Doe`, `PNJ54321`
+            </AlertDescription>
+            </Alert>
+
           <div className="flex justify-end gap-2">
             {results.length > 0 && (
                 <Button variant="outline" onClick={exportToCsv}>
@@ -125,11 +212,12 @@ export function MultiSearchTab() {
                         <TableHeader>
                         <TableRow>
                             <TableHead>Shipment ID</TableHead>
+                            <TableHead>Store</TableHead>
+                            <TableHead>Direction</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Order Date</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Courier</TableHead>
-                            <TableHead>Tracking No</TableHead>
                         </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -145,11 +233,12 @@ export function MultiSearchTab() {
                                         {item['Shipment ID']}
                                     </a>
                                 </TableCell>
+                                <TableCell>{item['Source Store']}</TableCell>
+                                <TableCell>{item['Direction']}</TableCell>
                                 <TableCell>{item['Customer Name']}</TableCell>
                                 <TableCell>{item['Order Date'] ? new Date(item['Order Date']).toLocaleDateString() : 'N/A'}</TableCell>
                                 <TableCell><StatusBadge status={item['Status'] || 'UNKNOWN'} /></TableCell>
                                 <TableCell>{item['Courier']}</TableCell>
-                                <TableCell>{item['Tracking No']}</TableCell>
                             </TableRow>
                         ))}
                         </TableBody>

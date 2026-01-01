@@ -112,6 +112,7 @@ export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 // Schema for multi-shipment lookup flow
 export const MultiLookupShipmentInputSchema = z.object({
   searchTerms: z.array(z.string()).describe('An array of search terms (e.g., order IDs).'),
+  storeNames: z.array(z.string()).optional().describe('An optional array of store names to filter the search.'),
 });
 export type MultiLookupShipmentInput = z.infer<typeof MultiLookupShipmentInputSchema>;
 
