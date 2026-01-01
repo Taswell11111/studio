@@ -13,18 +13,10 @@ import { format } from 'date-fns';
 import { STORES } from '@/lib/stores';
 import { ConnectionTestStreamChunkSchema } from '@/types';
 
-// --- Exported Function ---
-
-// This function now simply returns the flow object itself.
-// The server action will be responsible for invoking it.
-export function testParcelninjaConnection() {
-  return testParcelninjaConnectionFlow;
-}
-
 
 // --- GENKIT FLOW ---
 
-const testParcelninjaConnectionFlow = ai.defineFlow(
+export const testParcelninjaConnectionFlow = ai.defineFlow(
   {
     name: 'testParcelninjaConnectionFlow',
     outputSchema: ConnectionTestStreamChunkSchema, // Each chunk validates against this
