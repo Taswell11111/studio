@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from './status-badge';
-import { AlertCircle, Search, Download, CircleDotDashed, Info, Store, X } from 'lucide-react';
+import { AlertCircle, Search, Download, CircleDotDashed, Info, Store, X, Check } from 'lucide-react';
 import { ProcessingModal } from './processing-modal';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
