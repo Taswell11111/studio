@@ -101,4 +101,17 @@ export const LookupShipmentOutputSchema = z.object({
 });
 export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 
+// Schema for connection test streaming flow
+export const ConnectionTestStreamChunkSchema = z.object({
+  log: z.string().optional(),
+  result: z
+    .object({
+      storeName: z.string(),
+      success: z.boolean(),
+      error: z.string().optional(),
+    })
+    .optional(),
+});
+export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
     
+

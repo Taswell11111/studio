@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
-import type { Shipment, Inbound } from '@/types';
+import type { Shipment, Inbound, ConnectionTestStreamChunk } from '@/types';
 import { lookupShipment } from '@/ai/flows/lookup-shipment';
 import { testConnectionsAction } from '@/app/actions';
 import { initializeFirebase } from '@/firebase';
@@ -20,7 +20,6 @@ import { RefreshAllButton } from './refresh-all-button';
 import { InboundCard } from './inbound-card';
 import { LogViewer } from './log-viewer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { ConnectionTestStreamChunk } from '@/ai/flows/test-parcelninja-connection';
 
 
 type SearchResult = {

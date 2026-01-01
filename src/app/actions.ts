@@ -4,7 +4,7 @@
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
 import { streamFlow } from '@genkit-ai/flow/experimental';
-import type { ConnectionTestStreamChunk } from '@/ai/flows/test-parcelninja-connection';
+import type { ConnectionTestStreamChunk } from '@/types';
 
 /**
  * Server action to trigger the synchronization of recent shipment records.

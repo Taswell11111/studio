@@ -11,29 +11,11 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { STORES } from '@/lib/stores';
-
-// --- SCHEMAS ---
-// This schema defines the structure of each individual chunk of data we will stream.
-export const ConnectionTestStreamChunkSchema = z.object({
-  log: z.string().optional(),
-  result: z
-    .object({
-      storeName: z.string(),
-      success: z.boolean(),
-      error: z.string().optional(),
-    })
-    .optional(),
-});
-export type ConnectionTestStreamChunk = z.infer<
-  typeof ConnectionTestStreamChunkSchema
->;
-
-// The top-level output schema for the flow, which is now a stream of the above chunk.
-const TestConnectionOutputSchema = z.string(); // Not a stream schema, but will be a stream in practice.
+import { ConnectionTestStreamChunkSchema } from '@/types';
 
 // --- Exported Function ---
 
-export async function* testParcelninjaConnection(): AsyncGenerator<ConnectionTestStreamChunk> {
+export async function* testParcelninjaConnection(): AsyncGenerator<z.infer<typeof ConnectionTestStreamChunkSchema>> {
   // The function is now an async generator, allowing us to use `yield`
   for await (const chunk of testParcelninjaConnectionFlow()) {
     yield chunk;
