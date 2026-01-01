@@ -1,30 +1,52 @@
 
 'use client';
 
-import React, { useTransition } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { refreshAllShipmentsAction } from '@/app/actions';
 
 export function RefreshAllButton() {
   const [isRefreshing, startRefreshTransition] = useTransition();
+  const [isLocked, setIsLocked] = useState(true);
   const { toast } = useToast();
 
-  const handleRefreshAll = () => {
-    const password = prompt("Please enter the password to refresh all shipments:");
-
-    if (password === null) { // User clicked cancel
-        return;
-    }
-
-    if (password !== 'Test123') {
-        toast({
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Use a key combination to trigger the password prompt, e.g., Ctrl+Shift+P
+      if (event.ctrlKey && event.shiftKey && event.key === 'P') {
+        event.preventDefault();
+        const password = prompt("Enter password to unlock refresh action:");
+        if (password === 'Test123') {
+          setIsLocked(false);
+          toast({
+            title: 'Refresh Unlocked',
+            description: 'You can now refresh all shipments.',
+          });
+        } else if (password !== null) { // Avoid toast if user cancels prompt
+          toast({
             variant: 'destructive',
             title: 'Incorrect Password',
-            description: 'You are not authorized to perform this action.',
-        });
-        return;
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [toast]);
+
+  const handleRefreshAll = () => {
+    if (isLocked) {
+      toast({
+        variant: 'destructive',
+        title: 'Action Locked',
+        description: 'Press Ctrl+Shift+P and enter the password to unlock.',
+      });
+      return;
     }
 
     startRefreshTransition(async () => {
@@ -47,17 +69,26 @@ export function RefreshAllButton() {
           description: `${result.successCount} succeeded, ${result.failCount} failed. ${result.error || ''}`,
         });
       }
-      // Trigger a page reload to show updated statuses
+      // Trigger a page reload to show updated statuses and re-lock the button
       window.location.reload();
     });
   };
 
   return (
-    <Button onClick={handleRefreshAll} disabled={isRefreshing} variant="outline" size="sm">
-      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+    <Button 
+      onClick={handleRefreshAll} 
+      disabled={isRefreshing || isLocked} 
+      variant="outline" 
+      size="sm"
+      title={isLocked ? 'Press Ctrl+Shift+P to unlock' : 'Refresh all records from warehouses'}
+      className="disabled:cursor-not-allowed"
+    >
+      {isLocked ? (
+        <Lock className="mr-2 h-4 w-4" />
+      ) : (
+        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+      )}
       {isRefreshing ? 'Refreshing...' : 'Refresh All'}
     </Button>
   );
 }
-
-    
