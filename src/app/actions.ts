@@ -3,6 +3,8 @@
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
+import { streamFlow } from '@genkit-ai/flow/experimental';
+import type { ConnectionTestStreamChunk } from '@/ai/flows/test-parcelninja-connection';
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
@@ -47,18 +49,9 @@ export async function refreshAllShipmentsAction() {
 
 /**
  * Server action to test the connection to the Parcelninja API for all configured stores.
+ * This now uses experimental streaming to send logs back to the client in real-time.
  */
-export async function testConnectionsAction() {
-  try {
-    const result = await testParcelninjaConnection();
-    // Return the result directly as it matches the expected structure.
-    return result; 
-  } catch (error: any) {
-    console.error("Critical error in testConnectionsAction:", error);
-    return {
-      results: [],
-      logs: ['A critical error occurred during connection test.'],
-      error: error.message || 'An unknown server error occurred during connection test.',
-    }
-  }
+export async function testConnectionsAction(): Promise<ReadableStream<ConnectionTestStreamChunk>> {
+    const stream = await streamFlow(testParcelninjaConnection, []);
+    return stream;
 }

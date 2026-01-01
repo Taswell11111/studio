@@ -20,11 +20,19 @@ import { RefreshAllButton } from './refresh-all-button';
 import { InboundCard } from './inbound-card';
 import { LogViewer } from './log-viewer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { ConnectionTestStreamChunk } from '@/ai/flows/test-parcelninja-connection';
+
 
 type SearchResult = {
     shipment: Shipment | Inbound | null;
     relatedInbound?: Inbound | null;
 };
+
+type TestResult = {
+    storeName: string;
+    success: boolean;
+    error?: string;
+}
 
 export default function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +43,7 @@ export default function ShipmentDashboard() {
   const [processingTitle, setProcessingTitle] = useState('');
   const [isTesting, startTestTransition] = useTransition();
   const [logs, setLogs] = useState<string[]>([]);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [lastSearchedTerm, setLastSearchedTerm] = useState('');
   const [recordsCount, setRecordsCount] = useState<number | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
@@ -107,39 +116,52 @@ export default function ShipmentDashboard() {
 
   const handleTestConnections = () => {
     startTestTransition(async () => {
-      setLogs([]); // Clear previous logs
+      setLogs([]); 
+      setTestResults([]);
       toast({ title: 'Testing Connections...', description: 'Pinging all configured warehouse APIs.' });
-      
-      const response = await testConnectionsAction();
-      
-      const { results, error, logs: newLogs } = response;
-      
-      setLogs(newLogs || ['No logs were returned.']);
 
-      if (error) {
-        toast({ variant: 'destructive', title: 'Test Failed', description: error });
-        return;
-      }
-      
-      let successCount = 0;
-      results.forEach((result: any) => {
-        if (result.success) {
-          successCount++;
+      try {
+        const stream = await testConnectionsAction();
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        
+        let finalResults: TestResult[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = JSON.parse(decoder.decode(value)) as ConnectionTestStreamChunk;
+          
+          if (chunk.log) {
+            setLogs(prev => [...prev, chunk.log!]);
+          }
+          if (chunk.result) {
+            finalResults.push(chunk.result);
+          }
         }
-      });
+        
+        setTestResults(finalResults);
 
-      if(successCount === results.length) {
-         toast({ title: 'All Connections Successful', description: 'All warehouse APIs are responding correctly.' });
-      } else {
-        toast({
+        const successCount = finalResults.filter(r => r.success).length;
+
+        if (successCount === finalResults.length) {
+          toast({ title: 'All Connections Successful', description: 'All warehouse APIs are responding correctly.' });
+        } else {
+          toast({
             variant: 'destructive',
             title: 'Some Connections Failed',
-            description: `${results.length - successCount} of ${results.length} connections failed. See logs for details.`,
-        });
-      }
+            description: `${finalResults.length - successCount} of ${finalResults.length} connections failed. See logs for details.`,
+          });
+        }
 
+      } catch (error: any) {
+         toast({ variant: 'destructive', title: 'Test Failed', description: error.message || 'An unknown error occurred during the test.' });
+         console.error(error);
+      }
     });
-  }
+  };
+
 
   const DisplayCard = () => {
       if (!searchResult || !searchResult.shipment) return null;
@@ -268,5 +290,3 @@ export default function ShipmentDashboard() {
     </>
   );
 }
-
-    
