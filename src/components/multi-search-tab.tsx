@@ -178,9 +178,9 @@ export function MultiSearchTab() {
             <Info className="h-4 w-4" />
             <AlertTitle>Search Reference Guide</AlertTitle>
             <AlertDescription>
-                You can search by Order ID, Customer Name, or Tracking Number.
+                You can search by Order ID, Channel ID, Customer Name, or Tracking Number.
                 <br />
-                e.g., `SHP-12345`, `John Doe`, `PNJ54321`
+                e.g., `SHP-12345`, `Channel1`, `John Doe`, `PNJ54321`
             </AlertDescription>
             </Alert>
 

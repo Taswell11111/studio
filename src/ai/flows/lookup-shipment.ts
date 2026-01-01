@@ -230,7 +230,7 @@ async function searchFirestoreDatabase(searchTerm: string): Promise<Shipment | I
     if(inboundSnap.exists) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
     
     // Fallback to querying fields if not found by ID
-    const fieldsToSearch = ['Source Store Order ID', 'Channel ID', 'Customer Name', 'Tracking No'];
+    const fieldsToSearch = ['Source Store Order ID', 'Customer Name', 'Tracking No', 'Channel ID'];
     for (const field of fieldsToSearch) {
         const shipmentQuery = shipmentsRef.where(field, '==', searchTerm);
         const shipmentQuerySnap = await shipmentQuery.get();
