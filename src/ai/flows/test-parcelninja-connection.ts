@@ -17,7 +17,7 @@ import { ConnectionTestStreamChunkSchema } from '@/types';
 
 export async function* testParcelninjaConnection(): AsyncGenerator<z.infer<typeof ConnectionTestStreamChunkSchema>> {
   // The function is now an async generator, allowing us to use `yield`
-  yield* ai.runFlow(testParcelninjaConnectionFlow);
+  yield* testParcelninjaConnectionFlow();
 }
 
 // --- GENKIT FLOW ---
