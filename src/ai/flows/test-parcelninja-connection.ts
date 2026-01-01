@@ -17,7 +17,7 @@ import { ConnectionTestStreamChunkSchema } from '@/types';
 
 export async function* testParcelninjaConnection(): AsyncGenerator<z.infer<typeof ConnectionTestStreamChunkSchema>> {
   // The function is now an async generator, allowing us to use `yield`
-  for await (const chunk of testParcelninjaConnectionFlow()) {
+  for await (const chunk of ai.runFlow(testParcelninjaConnectionFlow)) {
     yield chunk;
   }
 }
