@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useTransition } from 'react';
@@ -11,6 +12,21 @@ export function RefreshAllButton() {
   const { toast } = useToast();
 
   const handleRefreshAll = () => {
+    const password = prompt("Please enter the password to refresh all shipments:");
+
+    if (password === null) { // User clicked cancel
+        return;
+    }
+
+    if (password !== 'Test123') {
+        toast({
+            variant: 'destructive',
+            title: 'Incorrect Password',
+            description: 'You are not authorized to perform this action.',
+        });
+        return;
+    }
+
     startRefreshTransition(async () => {
       toast({
         title: 'Refreshing All Shipments',
@@ -43,3 +59,5 @@ export function RefreshAllButton() {
     </Button>
   );
 }
+
+    

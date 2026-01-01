@@ -54,11 +54,16 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     const startDate = format(yesterday, 'yyyyMMdd');
     const endDate = format(today, 'yyyyMMdd');
 
+    const logWithTimestamp = (message: string) => {
+        const timestamp = new Date().toLocaleTimeString();
+        logs.push(`${timestamp} - ${message}`);
+    }
+
     for (const creds of STORES) {
-      logs.push(`[Connection Test] Testing store: ${creds.name}`);
+      logWithTimestamp(`[Connection Test] Testing store: ${creds.name}`);
       if (!creds.apiKey || !creds.apiSecret) {
         const errorMsg = 'Missing API Key or Secret in store configuration.';
-        logs.push(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`);
+        logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMsg}`);
         testResults.push({
           storeName: creds.name,
           success: false,
@@ -72,7 +77,7 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
       const url = `https://storeapi.parcelninja.com/api/v1/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1`;
       const basicAuth = Buffer.from(`${creds.apiKey}:${creds.apiSecret}`).toString('base64');
       
-      logs.push(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`);
+      logWithTimestamp(`[Connection Test] ➡️ ${creds.name}: Requesting URL: ${url}`);
 
       try {
         const response = await fetch(url, {
@@ -80,10 +85,10 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
           headers: { 'Authorization': `Basic ${basicAuth}` },
         });
         
-        logs.push(`[Connection Test] ⬅️ ${creds.name}: Received status ${response.status}`);
+        logWithTimestamp(`[Connection Test] ⬅️ ${creds.name}: Received status ${response.status}`);
 
         if (response.ok) {
-          logs.push(`[Connection Test] ✅ ${creds.name}: SUCCESS`);
+          logWithTimestamp(`[Connection Test] ✅ ${creds.name}: SUCCESS`);
           testResults.push({ storeName: creds.name, success: true });
         } else {
           let errorMessage = `API returned status ${response.status}.`;
@@ -95,12 +100,12 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
               errorMessage += ` Body: ${errorBody.substring(0, 150)}`; // Limit error body length
             } catch (e) {}
           }
-          logs.push(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMessage}`);
+          logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${errorMessage}`);
           testResults.push({ storeName: creds.name, success: false, error: errorMessage });
         }
       } catch (err: any) {
         const networkError = err.message || 'A network error occurred.';
-        logs.push(`[Connection Test] ❌ ${creds.name}: FAILED - ${networkError}`);
+        logWithTimestamp(`[Connection Test] ❌ ${creds.name}: FAILED - ${networkError}`);
         testResults.push({ storeName: creds.name, success: false, error: networkError });
       }
     }
@@ -108,3 +113,5 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     return { results: testResults, logs };
   }
 );
+
+    

@@ -10,14 +10,10 @@ import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connectio
  */
 export async function refreshAllShipmentsAction() {
   try {
-    // This will sync all records between the specified dates.
-    const fromDate = new Date('2025-12-10');
-    const toDate = new Date('2025-12-29');
-    const days = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 3600 * 24));
+    // Update default records to last 14 days of outbounds and inbounds as requested.
+    // This serves as the 'base data' for local cache searches.
+    const days = 14;
     
-    // syncRecentShipments schema only accepts 'days'. 
-    // The previous implementation tried to pass 'fromDate' and 'toDate' which caused a type error.
-    // We will stick to the 'days' parameter which calculates the date range internally in the flow.
     const result = await syncRecentShipments({ days });
 
     if (!result.success && result.errors.length > 0) {

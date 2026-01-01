@@ -9,7 +9,7 @@ import { initializeFirebase } from '@/firebase';
 import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
 import { STORES } from '@/lib/stores';
 
-import { Search, CloudLightning, Share2, AlertCircle, Wifi, Database, Store } from 'lucide-react';
+import { Search, CloudLightning, AlertCircle, Wifi, Database, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -141,22 +141,6 @@ export default function ShipmentDashboard() {
     });
   }
 
-  const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast({
-        title: "Link Copied",
-        description: "App link copied to clipboard!",
-      });
-    } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Copy Failed",
-        description: "Could not copy link to clipboard.",
-      });
-    }
-  };
-  
   const DisplayCard = () => {
       if (!searchResult || !searchResult.shipment) return null;
       
@@ -215,7 +199,6 @@ export default function ShipmentDashboard() {
                   {isTesting ? 'Testing...' : 'Test Connections'}
               </Button>
               <RefreshAllButton />
-              <Button variant="outline" onClick={handleShare}><Share2 className="mr-2 h-4 w-4"/><span>Share Tool</span></Button>
             </div>
           </div>
         </Card>
@@ -285,3 +268,5 @@ export default function ShipmentDashboard() {
     </>
   );
 }
+
+    

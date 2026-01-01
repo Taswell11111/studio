@@ -21,8 +21,11 @@ export function initializeFirebaseOnServer(): { firestore: AdminFirestore } {
          }
     }
   
-  // Pass databaseId as a string to getFirestore
+  // Return the default Firestore instance.
+  // The databaseId 'shipment-look' was likely causing the 'NOT_FOUND' error 
+  // if the project is using the default '(default)' database.
+  // When no databaseId is provided to getAdminFirestore(), it uses the default one.
   return {
-    firestore: getAdminFirestore('shipment-look'),
+    firestore: getAdminFirestore(),
   };
 }
