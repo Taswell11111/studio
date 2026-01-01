@@ -15,10 +15,12 @@ import { ConnectionTestStreamChunkSchema } from '@/types';
 
 // --- Exported Function ---
 
-export async function* testParcelninjaConnection(): AsyncGenerator<z.infer<typeof ConnectionTestStreamChunkSchema>> {
-  // The function is now an async generator, allowing us to use `yield`
-  yield* testParcelninjaConnectionFlow();
+// This function now simply returns the flow object itself.
+// The server action will be responsible for invoking it.
+export function testParcelninjaConnection() {
+  return testParcelninjaConnectionFlow;
 }
+
 
 // --- GENKIT FLOW ---
 
@@ -28,7 +30,7 @@ const testParcelninjaConnectionFlow = ai.defineFlow(
     outputSchema: ConnectionTestStreamChunkSchema, // Each chunk validates against this
   },
   async function* () {
-    // The flow itself is now an async generator.
+    // The flow itself is an async generator.
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);

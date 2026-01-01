@@ -4,6 +4,7 @@
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
 import type { ConnectionTestStreamChunk } from '@/types';
+import { ai } from '@/ai/genkit';
 
 /**
  * Server action to trigger the synchronization of recent shipment records.
@@ -51,17 +52,21 @@ export async function refreshAllShipmentsAction() {
  * This now uses a ReadableStream to send logs back to the client in real-time.
  */
 export async function testConnectionsAction(): Promise<ReadableStream<ConnectionTestStreamChunk>> {
-    const flowGenerator = testParcelninjaConnection();
+    // Get the flow object from the exported function
+    const flow = testParcelninjaConnection();
+    
+    // Correctly get the async generator stream by calling ai.runFlow
+    const flowStream = ai.runFlow(flow, undefined);
+    
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async pull(controller) {
-        const { value, done } = await flowGenerator.next();
-        if (done) {
-          controller.close();
-        } else {
+        // Iterate over the stream from ai.runFlow
+        for await (const value of flowStream) {
           controller.enqueue(encoder.encode(JSON.stringify(value)));
         }
+        controller.close();
       },
     });
 
