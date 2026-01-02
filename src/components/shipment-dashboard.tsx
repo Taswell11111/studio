@@ -56,9 +56,9 @@ export default function ShipmentDashboard() {
                 <CloudLightning className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground font-headline">Live Shipment Lookup</h1>
+                <h1 className="text-xl font-bold text-foreground font-headline">Omni-Channel Warehouse Fulfillment</h1>
                 <p className="text-xs text-muted-foreground font-medium mt-1">
-                  Directly query Parcelninja for order status
+                  Unified dashboard for live Parcelninja shipment tracking and warehouse logistics
                 </p>
               </div>
             </div>

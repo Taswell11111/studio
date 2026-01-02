@@ -178,6 +178,7 @@ export function MultiSearchTab() {
                 <Info className="h-4 w-4" />
                 <AlertTitle>Search Reference Guide</AlertTitle>
                 <AlertDescription>
+                    You can search by any of the following fields. Provide one or more values, separated by commas or newlines.
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                         <li><b>Order ID:</b> The unique identifier for a shipment. e.g., `SHP-12345` or `RET-54321`</li>
                         <li><b>Channel ID:</b> The ID from the originating sales channel. e.g., `H10598`, `D23455`</li>
