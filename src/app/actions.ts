@@ -4,7 +4,8 @@
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
 import { multiLookupShipment } from '@/ai/flows/multi-lookup-shipment';
-import type { MultiLookupShipmentInput, MultiLookupShipmentOutput } from '@/types';
+import { getAllRecords } from '@/ai/flows/get-all-records';
+import type { MultiLookupShipmentInput, MultiLookupShipmentOutput, ShipmentRecord } from '@/types';
 
 
 /**
@@ -80,4 +81,20 @@ export async function multiLookupShipmentAction(input: MultiLookupShipmentInput)
             error: error.message || 'An unknown server error occurred.',
         };
     }
+}
+
+/**
+ * Server action to fetch all records from the database for export.
+ */
+export async function exportAllRecordsAction(): Promise<{ records: ShipmentRecord[], error?: string }> {
+  try {
+    const result = await getAllRecords();
+    return { records: result.records };
+  } catch (error: any) {
+    console.error("Critical error in exportAllRecordsAction:", error);
+    return {
+        records: [],
+        error: error.message || 'An unknown server error occurred while exporting records.',
+    };
+  }
 }
