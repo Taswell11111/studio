@@ -3,7 +3,6 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { multiLookupAction } from '@/app/actions';
 import { type MultiLookupShipmentOutput, type ShipmentRecord, type MultiLookupShipmentStreamChunk } from '@/types';
 import { STORES } from '@/lib/stores';
 
@@ -54,17 +53,22 @@ export function MultiSearchTab() {
         abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     startSearchTransition(async () => {
       setResults([]);
       setNotFound([]);
       setLogs([]);
       try {
-        const response = await multiLookupAction({ 
-            searchTerms: terms,
-            storeNames: selectedStores.length > 0 ? selectedStores : undefined,
-            direction: searchDirection,
-            abortSignal: abortControllerRef.current?.signal,
+        const response = await fetch('/api/lookup/multi', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                searchTerms: terms,
+                storeNames: selectedStores.length > 0 ? selectedStores : undefined,
+                direction: searchDirection,
+             }),
+             signal: signal 
         });
 
         if (!response.body) {
@@ -78,6 +82,11 @@ export function MultiSearchTab() {
         while(true) {
             const { done, value } = await reader.read();
             if (done) break;
+
+            if (signal.aborted) {
+                await reader.cancel();
+                break;
+            }
 
             const chunk = decoder.decode(value, { stream: true });
             chunk.split('\n\n').forEach(line => {
@@ -100,15 +109,19 @@ export function MultiSearchTab() {
             });
         }
         
+        if (signal.aborted) {
+            toast({ variant: 'default', title: 'Search Aborted' });
+            return;
+        }
+
         if (finalResult) {
             setResults(finalResult.results);
             setNotFound(finalResult.notFound);
+            toast({
+              title: 'Search Complete',
+              description: `Found ${finalResult.results.length} unique records for ${terms.length} terms.`,
+            });
         }
-
-        toast({
-          title: 'Search Complete',
-          description: `Found ${finalResult?.results.length || 0} unique records for ${terms.length} terms.`,
-        });
 
       } catch (error: any) {
          if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {

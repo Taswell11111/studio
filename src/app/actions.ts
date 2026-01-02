@@ -56,7 +56,10 @@ export async function refreshAllShipmentsAction() {
  */
 export async function testConnectionsAction(): Promise<Response> {
   try {
-    const flowStream = testParcelninjaConnectionFlow();
+    // Genkit flows return a Promise by default. To stream, we must call .stream()
+    // and access the .stream property of the result.
+    const flowResponse = testParcelninjaConnectionFlow.stream();
+    const flowStream = flowResponse.stream;
     
     const readableStream = new ReadableStream({
       async start(controller) {
@@ -93,7 +96,9 @@ export async function testConnectionsAction(): Promise<Response> {
  */
 export async function multiLookupAction(input: MultiLookupShipmentInput): Promise<Response> {
     try {
-        const flowStream = multiLookupShipmentFlow(input);
+        const flowResponse = multiLookupShipmentFlow.stream(input);
+        const flowStream = flowResponse.stream;
+
         const readableStream = new ReadableStream({
             async start(controller) {
                 const encoder = new TextEncoder();
@@ -137,10 +142,14 @@ export async function multiLookupAction(input: MultiLookupShipmentInput): Promis
 
 /**
  * Server action to perform a single shipment lookup and stream results.
+ * NOTE: This is likely replaced by /api/lookup/single route for reliability, 
+ * but kept here if needed or for legacy support.
  */
 export async function singleLookupAction(input: LookupShipmentInput): Promise<Response> {
     try {
-        const flowStream = lookupShipmentFlow(input);
+        const flowResponse = lookupShipmentFlow.stream(input);
+        const flowStream = flowResponse.stream;
+
         const readableStream = new ReadableStream({
             async start(controller) {
                 const encoder = new TextEncoder();

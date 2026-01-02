@@ -98,7 +98,8 @@ export type ClearInboundDataOutput = z.infer<typeof ClearInboundDataOutputSchema
 
 // Schema for shipment lookup flow
 export const LookupShipmentInputSchema = z.object({
-  sourceStoreOrderId: z.string().describe('The Order ID from the source store.'),
+  sourceStoreOrderId: z.string().describe('The search term entered by the user.'),
+  searchBy: z.enum(['shipmentId', 'orderId', 'customerName', 'email', 'trackingLink', 'sku', 'all']).optional().default('all').describe('The field to search by.'),
   storeName: z.string().optional().describe('The specific store to search in.'),
   direction: z.enum(['all', 'inbound', 'outbound']).optional().describe('The direction to search in.'),
   abortSignal: z.any().optional().describe('An AbortSignal to cancel the operation.'),
@@ -156,5 +157,3 @@ export const ConnectionTestStreamChunkSchema = z.object({
     .optional(),
 });
 export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
-
-    

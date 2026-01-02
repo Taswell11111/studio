@@ -10,7 +10,7 @@ config();
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { STORES } from '@/lib/stores';
+import { getStores } from '@/lib/stores';
 
 const TestResultSchema = z.object({
   storeName: z.string(),
@@ -45,7 +45,10 @@ export const testParcelninjaConnectionFlow = ai.defineFlow(
       return `${timestamp} - ${message}`;
     };
 
-    for (const creds of STORES) {
+    // Use getStores() to ensure we have the latest config
+    const stores = getStores();
+
+    for (const creds of stores) {
       const logMsg = logWithTimestamp(`[Connection Test] Testing store: ${creds.name}`);
       yield { log: logMsg };
 

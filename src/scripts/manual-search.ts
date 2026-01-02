@@ -1,4 +1,3 @@
-
 import { config } from 'dotenv';
 import path from 'path';
 
@@ -7,12 +6,13 @@ const secretsPath = path.resolve(process.cwd(), 'secrets.env');
 config({ path: secretsPath });
 config({ path: path.resolve(process.cwd(), '.env') });
 
-import { performLiveSearch } from '@/ai/flows/lookup-shipment';
 // Import getStores to get fresh config
 import { getStores } from '@/lib/stores';
 
 async function main() {
-  const searchTerm = 'SHP-10000535797';
+  const searchTerm = 'J16530';
+  const searchBy = 'orderId';
+  const storeName = 'JEEP'; 
   
   // Debug: Check if variables are loaded
   console.log('Checking environment variables...');
@@ -25,20 +25,28 @@ async function main() {
 
   // Debug: Check if config picked it up
   const stores = getStores();
-  const dieselStore = stores.find(s => s.name === 'DIESEL');
-  if (dieselStore && dieselStore.apiKey) {
-       console.log('Store config has API Key.');
+  const jeepStore = stores.find(s => s.name === 'JEEP');
+  if (jeepStore && jeepStore.apiKey) {
+       console.log('JEEP Store config has API Key.');
   } else {
-       console.error('Store config is missing API Key.');
+       console.error('JEEP Store config is missing API Key.');
   }
   
   try {
-      console.log(`\nSearching for: ${searchTerm}`);
+      // Dynamic import to ensure env vars are loaded before STORES is initialized in the module
+      const { performLiveSearch } = await import('@/ai/flows/lookup-shipment');
+
+      console.log(`\nSearching for: ${searchTerm} by ${searchBy} in ${storeName}`);
       console.log('Testing direct Live API search...');
-      const fromDate = new Date('2024-01-01');
-      const toDate = new Date(); // Today
       
-      const { record, logs } = await performLiveSearch(searchTerm, fromDate, toDate, undefined, 'all', undefined);
+      // Mimic the "Pass 3" historical logic I implemented in the app
+      const toDate = new Date(); 
+      const fromDate = new Date(toDate);
+      fromDate.setFullYear(toDate.getFullYear() - 7);
+      
+      console.log(`Date Range: ${fromDate.toISOString()} to ${toDate.toISOString()}`);
+      
+      const { record, logs } = await performLiveSearch(searchTerm, searchBy, fromDate, toDate, storeName, 'all', undefined);
       
       console.log('\n--- LOGS ---');
       logs.forEach(l => console.log(l));

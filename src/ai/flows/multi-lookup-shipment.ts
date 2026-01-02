@@ -35,12 +35,16 @@ export const multiLookupShipmentFlow = ai.defineFlow(
         let termResult: ShipmentRecord | null = null;
         let termRelated: ShipmentRecord | null = null;
         
-        const singleLookupStream = lookupShipmentFlow({ 
+        // Correctly invoke the sub-flow using .stream() to get the async iterable
+        const flowResponse = lookupShipmentFlow.stream({ 
             sourceStoreOrderId: term, 
+            searchBy: 'all', // Defaulting to 'all' as multi-lookup usually implies generic ID search
             storeName: storeNames && storeNames.length > 0 ? storeNames[0] : undefined, // simplify for now
             direction,
             abortSignal,
         });
+        
+        const singleLookupStream = flowResponse.stream;
 
         for await (const chunk of singleLookupStream) {
             if (chunk.log) {
@@ -95,5 +99,3 @@ export const multiLookupShipmentFlow = ai.defineFlow(
     }
   }
 );
-
-    

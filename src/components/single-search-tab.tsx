@@ -3,11 +3,11 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import type { Shipment, Inbound, LookupShipmentStreamChunk } from '@/types';
-import { singleLookupAction } from '@/app/actions';
+// import { singleLookupAction } from '@/app/actions'; // <-- NOT using Server Action anymore
 import { STORES } from '@/lib/stores';
 import { useToast } from '@/hooks/use-toast';
 
-import { Search, AlertCircle, Store } from 'lucide-react';
+import { Search, AlertCircle, Store, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -25,6 +25,7 @@ type SearchResult = {
 export function SingleSearchTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStore, setSelectedStore] = useState('All');
+  const [selectedSearchBy, setSelectedSearchBy] = useState('all');
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [lastSearchedTerm, setLastSearchedTerm] = useState('');
@@ -44,15 +45,22 @@ export function SingleSearchTab() {
         abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
     
     startSearchTransition(async () => {
       setSearchResult(null);
       setLogs([]);
       try {
-        const response = await singleLookupAction({ 
-            sourceStoreOrderId: trimmedSearch,
-            storeName: selectedStore === 'All' ? undefined : selectedStore,
-            abortSignal: abortControllerRef.current?.signal,
+        // Use Fetch to API Route instead of Server Action
+        const response = await fetch('/api/lookup/single', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                sourceStoreOrderId: trimmedSearch,
+                searchBy: selectedSearchBy,
+                storeName: selectedStore === 'All' ? undefined : selectedStore,
+             }),
+             signal: signal 
         });
 
         if (!response.body) {
@@ -67,8 +75,7 @@ export function SingleSearchTab() {
             const { done, value } = await reader.read();
             if (done) break;
 
-            if (abortControllerRef.current?.signal.aborted) {
-                // The signal aborts the fetch on the server, but we also break the client loop
+            if (signal.aborted) {
                 break;
             }
             
@@ -95,7 +102,7 @@ export function SingleSearchTab() {
             });
         }
 
-        if (abortControllerRef.current?.signal.aborted) {
+        if (signal.aborted) {
            toast({
                 variant: 'default',
                 title: 'Search Aborted',
@@ -177,14 +184,32 @@ export function SingleSearchTab() {
                 <Input
                     type="text"
                     className="w-full pl-11 pr-4 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
-                    placeholder="Search by Order ID, Customer Name, Item..."
+                    placeholder="Search by Order ID, Shipment ID, Customer..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
             <div className="flex gap-2">
+                 <Select value={selectedSearchBy} onValueChange={setSelectedSearchBy}>
+                    <SelectTrigger className="w-[160px] h-14 text-base">
+                        <div className="flex items-center gap-2">
+                           <Filter className="w-4 h-4 text-muted-foreground" />
+                           <SelectValue placeholder="Search By" />
+                        </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Smart Search</SelectItem>
+                        <SelectItem value="shipmentId">Shipment ID</SelectItem>
+                        <SelectItem value="orderId">Order ID</SelectItem>
+                        <SelectItem value="customerName">Customer Name</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="trackingLink">Tracking Link</SelectItem>
+                        <SelectItem value="sku">Item SKU</SelectItem>
+                    </SelectContent>
+                </Select>
+
                 <Select value={selectedStore} onValueChange={setSelectedStore}>
-                    <SelectTrigger className="w-full sm:w-[180px] h-14 text-base">
+                    <SelectTrigger className="w-[160px] h-14 text-base">
                         <div className="flex items-center gap-2">
                            <Store className="w-4 h-4 text-muted-foreground" />
                            <SelectValue placeholder="Select a store" />
@@ -226,7 +251,7 @@ export function SingleSearchTab() {
         {!searchResult && !lastSearchedTerm && !isSearching && (
           <Card className="text-center py-12 text-muted-foreground border-dashed bg-secondary/10">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Enter an Order ID, Customer Name, or Item Name to check its status.</p>
+            <p>Enter an Order ID, Shipment ID, Customer Name, or SKU to check its status.</p>
           </Card>
         )}
       </div>
