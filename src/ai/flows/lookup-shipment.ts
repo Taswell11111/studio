@@ -91,6 +91,11 @@ export const lookupShipmentFlow = ai.defineFlow(
                 }
              }
         }
+        
+        // Ensure data is serializable before yielding
+        if (foundRecord) foundRecord = ensureSerializable(foundRecord);
+        if (relatedInbound) relatedInbound = ensureSerializable(relatedInbound);
+
         yield { result: { shipment: foundRecord, relatedInbound } };
         return;
     }
@@ -134,6 +139,10 @@ export const lookupShipmentFlow = ai.defineFlow(
               }
           }
       }
+      
+      // Ensure data is serializable before yielding
+      if (foundRecord) foundRecord = ensureSerializable(foundRecord);
+      if (relatedInbound) relatedInbound = ensureSerializable(relatedInbound);
 
       yield { result: { shipment: foundRecord, relatedInbound: relatedInbound } };
       return;
@@ -236,10 +245,12 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
         const fieldsToSearch = ['Source Store Order ID', 'Customer Name', 'Tracking No', 'Channel ID'];
 
         const searchCollection = async (ref: adminFirestore.CollectionReference) => {
+            // Try to get by document ID first
             const docRef = ref.doc(searchTerm);
             const snap = await docRef.get();
             if(snap.exists) return { id: snap.id, ...snap.data() };
 
+            // Fallback to querying fields
             for (const field of fieldsToSearch) {
                 const query = ref.where(field, '==', searchTerm);
                 const querySnap = await query.get();
@@ -250,22 +261,22 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
             }
             return null;
         }
-
+        
+        let result: any | null = null;
         if (direction === 'all' || direction === 'outbound') {
-            const shipmentResult = await searchCollection(shipmentsRef);
-            if (shipmentResult) return shipmentResult as Shipment;
+            result = await searchCollection(shipmentsRef);
         }
         
-        if (direction === 'all' || direction === 'inbound') {
-            const inboundResult = await searchCollection(inboundsRef);
-            if (inboundResult) return inboundResult as Inbound;
+        if (!result && (direction === 'all' || direction === 'inbound')) {
+            result = await searchCollection(inboundsRef);
         }
+        
+        return result ? ensureSerializable(result) : null;
+        
     } catch(e: any) {
         console.error("CRITICAL: Firestore search failed with error:", e);
         throw new Error("Could not connect to the local database. " + (e.message || ""));
     }
-
-    return null;
 }
 
 function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', storeName: string): Shipment | Inbound {
@@ -278,7 +289,6 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
         : data.status;
 
     const status = latestEvent?.description || 'Unknown';
-    const statusDate = latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date();
   
   const baseRecord = {
     'Direction': direction,
@@ -286,14 +296,14 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     'Source Store': storeName,
     'Source Store Order ID': String(data.clientId || ''),
     'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
-    'Order Date': (data.createDate ? formatApiDate(data.createDate) : new Date()).toISOString(),
+    'Order Date': (data.createDate ? formatApiDate(data.createDate) : new Date()),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
     'Email': data.deliveryInfo?.email || '',
     'Status': status,
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || storeName,
     'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
-    'Status Date': statusDate.toISOString(),
+    'Status Date': latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date(),
     'Address Line 1': data.deliveryInfo?.addressLine1 || '',
     'Address Line 2': data.deliveryInfo?.addressLine2 || '',
     'City': data.deliveryInfo?.suburb || '',
@@ -327,6 +337,25 @@ function formatApiDate(dateStr: string): Date {
   }
 }
 
+/**
+ * Ensures a record's date fields are converted to ISO strings for serialization.
+ */
+function ensureSerializable<T extends Shipment | Inbound>(record: T): T {
+    const newRecord = { ...record };
     
+    if (newRecord['Order Date'] && newRecord['Order Date'] instanceof Date) {
+        newRecord['Order Date'] = newRecord['Order Date'].toISOString();
+    } else if (newRecord['Order Date'] && typeof newRecord['Order Date'] === 'object' && '_seconds' in newRecord['Order Date']) {
+       // It's a Firestore timestamp
+       newRecord['Order Date'] = new Date((newRecord['Order Date'] as any)._seconds * 1000).toISOString();
+    }
 
+    if (newRecord['Status Date'] && newRecord['Status Date'] instanceof Date) {
+        newRecord['Status Date'] = newRecord['Status Date'].toISOString();
+    } else if (newRecord['Status Date'] && typeof newRecord['Status Date'] === 'object' && '_seconds' in newRecord['Status Date']) {
+       // It's a Firestore timestamp
+       newRecord['Status Date'] = new Date((newRecord['Status Date'] as any)._seconds * 1000).toISOString();
+    }
     
+    return newRecord;
+}
