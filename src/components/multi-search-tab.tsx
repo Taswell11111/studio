@@ -3,8 +3,8 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { multiLookupShipmentFlow } from '@/ai/flows/multi-lookup-shipment';
-import { type MultiLookupShipmentOutput, type ShipmentRecord } from '@/types';
+import { multiLookupAction } from '@/app/actions';
+import { type MultiLookupShipmentOutput, type ShipmentRecord, type MultiLookupShipmentStreamChunk } from '@/types';
 import { STORES } from '@/lib/stores';
 
 import { Card } from '@/components/ui/card';
@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 
 type SearchDirection = 'all' | 'inbound' | 'outbound';
@@ -60,31 +60,49 @@ export function MultiSearchTab() {
       setNotFound([]);
       setLogs([]);
       try {
-        const stream = multiLookupShipmentFlow({ 
+        const response = await multiLookupAction({ 
             searchTerms: terms,
             storeNames: selectedStores.length > 0 ? selectedStores : undefined,
             direction: searchDirection,
             abortSignal: abortControllerRef.current?.signal,
         });
-        
-        let finalResult: MultiLookupShipmentOutput | null = null;
-        for await (const chunk of stream) {
-            if(abortControllerRef.current?.signal.aborted) break;
 
-            if (chunk.log) {
-                setLogs(prev => [...prev, chunk.log as string]);
-            }
-            if (chunk.result) {
-                finalResult = chunk.result;
-            }
+        if (!response.body) {
+          throw new Error("The response body is empty.");
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let finalResult: MultiLookupShipmentOutput | null = null;
+        
+        while(true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            chunk.split('\n\n').forEach(line => {
+                if(line.trim()) {
+                    try {
+                        const parsed = JSON.parse(line) as MultiLookupShipmentStreamChunk;
+                        if(parsed.log) {
+                            setLogs(prev => [...prev, parsed.log as string]);
+                        }
+                        if(parsed.result) {
+                            finalResult = parsed.result;
+                        }
+                        if(parsed.error) {
+                          throw new Error(parsed.error.message);
+                        }
+                    } catch (e) {
+                        console.warn("Could not parse stream line: ", line);
+                    }
+                }
+            });
         }
         
         if (finalResult) {
             setResults(finalResult.results);
             setNotFound(finalResult.notFound);
-            if (finalResult.error) {
-                 throw new Error(finalResult.error);
-            }
         }
 
         toast({
@@ -333,5 +351,3 @@ export function MultiSearchTab() {
     </>
   );
 }
-
-    

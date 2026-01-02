@@ -114,6 +114,7 @@ export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 export const LookupShipmentStreamChunkSchema = z.object({
   log: z.string().optional(),
   result: LookupShipmentOutputSchema.optional(),
+  error: z.object({ message: z.string() }).optional(),
 });
 export type LookupShipmentStreamChunk = z.infer<typeof LookupShipmentStreamChunkSchema>;
 
@@ -137,6 +138,7 @@ export type MultiLookupShipmentOutput = z.infer<typeof MultiLookupShipmentOutput
 export const MultiLookupShipmentStreamChunkSchema = z.object({
     log: z.string().optional(),
     result: MultiLookupShipmentOutputSchema.optional(),
+    error: z.object({ message: z.string() }).optional(),
 });
 export type MultiLookupShipmentStreamChunk = z.infer<typeof MultiLookupShipmentStreamChunkSchema>;
 
@@ -153,5 +155,3 @@ export const ConnectionTestStreamChunkSchema = z.object({
     .optional(),
 });
 export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
-
-    

@@ -3,9 +3,10 @@
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
 import { testParcelninjaConnectionFlow } from '@/ai/flows/test-parcelninja-connection';
-import { multiLookupShipment } from '@/ai/flows/multi-lookup-shipment';
+import { multiLookupShipmentFlow } from '@/ai/flows/multi-lookup-shipment';
+import { lookupShipmentFlow } from '@/ai/flows/lookup-shipment';
 import { getAllRecords } from '@/ai/flows/get-all-records';
-import type { MultiLookupShipmentInput, MultiLookupShipmentOutput, ShipmentRecord } from '@/types';
+import type { LookupShipmentInput, MultiLookupShipmentInput, ShipmentRecord } from '@/types';
 
 
 /**
@@ -55,7 +56,6 @@ export async function refreshAllShipmentsAction() {
  */
 export async function testConnectionsAction(): Promise<Response> {
   try {
-    // This is now a streaming flow. ai.runFlow returns an async generator.
     const flowStream = testParcelninjaConnectionFlow();
     
     const readableStream = new ReadableStream({
@@ -63,7 +63,6 @@ export async function testConnectionsAction(): Promise<Response> {
         const encoder = new TextEncoder();
         try {
           for await (const chunk of flowStream) {
-            // Each chunk is an object from the flow's output stream
             controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
           }
         } catch (e: any) {
@@ -90,20 +89,73 @@ export async function testConnectionsAction(): Promise<Response> {
 
 
 /**
- * Server action to perform a multi-shipment lookup.
+ * Server action to perform a multi-shipment lookup and stream results.
  */
-export async function multiLookupShipmentAction(input: MultiLookupShipmentInput): Promise<MultiLookupShipmentOutput> {
+export async function multiLookupAction(input: MultiLookupShipmentInput): Promise<Response> {
     try {
-        // Since we cannot pass AbortSignal to server action, we just call the flow.
-        // The flow itself won't be abortable from the client, but the client can stop listening.
-        return await multiLookupShipment(input);
+        const flowStream = multiLookupShipmentFlow(input);
+        const readableStream = new ReadableStream({
+            async start(controller) {
+                const encoder = new TextEncoder();
+                try {
+                    for await (const chunk of flowStream) {
+                        controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+                    }
+                } catch (e: any) {
+                    console.error("Error in multi-lookup stream processing:", e);
+                    const errorChunk = { error: { message: e.message || "An unknown stream error occurred." }};
+                    controller.enqueue(encoder.encode(JSON.stringify(errorChunk) + '\n\n'));
+                } finally {
+                    controller.close();
+                }
+            },
+        });
+
+        return new Response(readableStream, {
+            headers: { 'Content-Type': 'application/json' },
+        });
+
     } catch (error: any) {
         console.error("Critical error in multiLookupShipmentAction:", error);
-        return {
-            results: [],
-            notFound: input.searchTerms,
-            error: error.message || 'An unknown server error occurred.',
-        };
+        return new Response(JSON.stringify({ error: { message: error.message || 'An unknown server error occurred' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+    }
+}
+
+
+/**
+ * Server action to perform a single shipment lookup and stream results.
+ */
+export async function singleLookupAction(input: LookupShipmentInput): Promise<Response> {
+    try {
+        const flowStream = lookupShipmentFlow(input);
+        const readableStream = new ReadableStream({
+            async start(controller) {
+                const encoder = new TextEncoder();
+                try {
+                    for await (const chunk of flowStream) {
+                        controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+                    }
+                } catch (e: any) {
+                    console.error("Error in single-lookup stream processing:", e);
+                    const errorChunk = { error: { message: e.message || "An unknown stream error occurred." } };
+                    controller.enqueue(encoder.encode(JSON.stringify(errorChunk) + '\n\n'));
+                } finally {
+                    controller.close();
+                }
+            },
+        });
+        return new Response(readableStream, {
+            headers: { 'Content-Type': 'application/json' },
+        });
+    } catch (error: any) {
+        console.error("Critical error in singleLookupAction:", error);
+        return new Response(JSON.stringify({ error: { message: error.message || 'An unknown error occurred' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
     }
 }
 

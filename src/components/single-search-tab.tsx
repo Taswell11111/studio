@@ -2,8 +2,8 @@
 'use client';
 
 import React, { useState, useTransition, useRef } from 'react';
-import type { Shipment, Inbound } from '@/types';
-import { lookupShipmentFlow } from '@/ai/flows/lookup-shipment';
+import type { Shipment, Inbound, LookupShipmentStreamChunk } from '@/types';
+import { singleLookupAction } from '@/app/actions';
 import { STORES } from '@/lib/stores';
 import { useToast } from '@/hooks/use-toast';
 
@@ -49,24 +49,50 @@ export function SingleSearchTab() {
       setSearchResult(null);
       setLogs([]);
       try {
-        const stream = lookupShipmentFlow({ 
+        const response = await singleLookupAction({ 
             sourceStoreOrderId: trimmedSearch,
             storeName: selectedStore === 'All' ? undefined : selectedStore,
             abortSignal: abortControllerRef.current?.signal,
         });
+
+        if (!response.body) {
+          throw new Error("The response body is empty.");
+        }
         
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         let finalResult: SearchResult | null = null;
-        for await (const chunk of stream) {
+        
+        while(true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
             if (abortControllerRef.current?.signal.aborted) {
-                // Don't throw error, just break loop client-side
+                // The signal aborts the fetch on the server, but we also break the client loop
                 break;
             }
-            if (chunk.log) {
-                setLogs(prev => [...prev, chunk.log as string]);
-            }
-            if(chunk.result) {
-                finalResult = chunk.result;
-            }
+            
+            const chunk = decoder.decode(value, { stream: true });
+            
+            // Process potential multiple JSON objects in a single chunk
+            chunk.split('\n\n').forEach(line => {
+                if(line.trim()) {
+                    try {
+                        const parsed = JSON.parse(line) as LookupShipmentStreamChunk;
+                        if(parsed.log) {
+                            setLogs(prev => [...prev, parsed.log as string]);
+                        }
+                        if(parsed.result) {
+                            finalResult = parsed.result; // This will be overwritten until the final result arrives
+                        }
+                        if(parsed.error) {
+                           throw new Error(parsed.error.message);
+                        }
+                    } catch (e) {
+                        console.warn("Could not parse stream line: ", line);
+                    }
+                }
+            });
         }
 
         if (abortControllerRef.current?.signal.aborted) {
@@ -92,13 +118,14 @@ export function SingleSearchTab() {
           });
         }
       } catch (err: any) {
-        // Catch errors that might happen before the loop (e.g. flow invocation error)
-        console.error("Search error:", err);
-        toast({
-            variant: "destructive",
-            title: "Search Error",
-            description: err.message || "An unexpected error occurred while searching.",
-        });
+        if (err.name !== 'AbortError' && !err.message.includes('aborted')) {
+          console.error("Search error:", err);
+          toast({
+              variant: "destructive",
+              title: "Search Error",
+              description: err.message || "An unexpected error occurred while searching.",
+          });
+        }
       } finally {
         abortControllerRef.current = null;
       }
@@ -206,5 +233,3 @@ export function SingleSearchTab() {
     </>
   );
 }
-
-    
