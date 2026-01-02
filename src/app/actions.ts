@@ -99,7 +99,17 @@ export async function multiLookupAction(input: MultiLookupShipmentInput): Promis
                 const encoder = new TextEncoder();
                 try {
                     for await (const chunk of flowStream) {
-                        controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+                        // Manually reconstruct the object to ensure it is plain.
+                        const plainChunk = {
+                            log: chunk.log,
+                            result: chunk.result ? {
+                                results: chunk.result.results,
+                                notFound: chunk.result.notFound,
+                                error: chunk.result.error,
+                            } : undefined,
+                            error: chunk.error ? { message: chunk.error.message } : undefined,
+                        };
+                        controller.enqueue(encoder.encode(JSON.stringify(plainChunk) + '\n\n'));
                     }
                 } catch (e: any) {
                     console.error("Error in multi-lookup stream processing:", e);
@@ -136,7 +146,17 @@ export async function singleLookupAction(input: LookupShipmentInput): Promise<Re
                 const encoder = new TextEncoder();
                 try {
                     for await (const chunk of flowStream) {
-                        controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+                        // Manually reconstruct the object to ensure it is plain.
+                        const plainChunk = {
+                          log: chunk.log,
+                          result: chunk.result ? {
+                            shipment: chunk.result.shipment,
+                            relatedInbound: chunk.result.relatedInbound,
+                            error: chunk.result.error,
+                          } : undefined,
+                          error: chunk.error ? { message: chunk.error.message } : undefined,
+                        };
+                        controller.enqueue(encoder.encode(JSON.stringify(plainChunk) + '\n\n'));
                     }
                 } catch (e: any) {
                     console.error("Error in single-lookup stream processing:", e);

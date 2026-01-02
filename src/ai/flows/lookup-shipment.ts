@@ -89,8 +89,7 @@ export const lookupShipmentFlow = ai.defineFlow(
         }
         
         const finalResult = { shipment: foundRecord, relatedInbound };
-        const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
-        yield { result: finalSerializableResult };
+        yield { result: finalResult };
         return;
     }
 
@@ -135,8 +134,7 @@ export const lookupShipmentFlow = ai.defineFlow(
       }
       
       const finalResult = { shipment: foundRecord, relatedInbound: relatedInbound };
-      const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
-      yield { result: finalSerializableResult };
+      yield { result: finalResult };
       return;
     }
 
@@ -249,7 +247,7 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
                 const querySnap = await query.get();
                 if(!querySnap.empty) {
                     const doc = querySnap.docs[0];
-                    const data = JSON.parse(JSON.stringify(doc.data()));
+                     const data = JSON.parse(JSON.stringify(doc.data()));
                     return { id: doc.id, ...data };
                 }
             }
