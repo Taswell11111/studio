@@ -35,14 +35,14 @@ export const STORES: Store[] = [
         "prefix": "J"
     },
     {
-        "name": "Superdry",
+        "name": "SUPERDRY",
         "apiKey": process.env.SUPERDRY_WAREHOUSE_API_USERNAME || "",
         "apiSecret": process.env.SUPERDRY_WAREHOUSE_API_PASSWORD || "",
         "storeId": "b112948b-0390-4833-8f41-47f997c5382c",
         "prefix": "S"
     },
     {
-        "name": "Reebok",
+        "name": "REEBOK",
         "apiKey": process.env.REEBOK_WAREHOUSE_API_USERNAME || "",
         "apiSecret": process.env.REEBOK_WAREHOUSE_API_PASSWORD || "",
         "storeId": "963f57af-6f46-4d6d-b07c-dc4aa684cdfa",

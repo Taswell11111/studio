@@ -99,6 +99,7 @@ export type ClearInboundDataOutput = z.infer<typeof ClearInboundDataOutputSchema
 export const LookupShipmentInputSchema = z.object({
   sourceStoreOrderId: z.string().describe('The Order ID from the source store.'),
   storeName: z.string().optional().describe('The specific store to search in.'),
+  direction: z.enum(['all', 'inbound', 'outbound']).optional().describe('The direction to search in.'),
 });
 export type LookupShipmentInput = z.infer<typeof LookupShipmentInputSchema>;
 
@@ -113,6 +114,7 @@ export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 export const MultiLookupShipmentInputSchema = z.object({
   searchTerms: z.array(z.string()).describe('An array of search terms (e.g., order IDs).'),
   storeNames: z.array(z.string()).optional().describe('An optional array of store names to filter the search.'),
+  direction: z.enum(['all', 'inbound', 'outbound']).optional().describe('The direction to search in.'),
 });
 export type MultiLookupShipmentInput = z.infer<typeof MultiLookupShipmentInputSchema>;
 

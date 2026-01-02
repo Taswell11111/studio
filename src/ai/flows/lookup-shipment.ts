@@ -10,6 +10,7 @@ config();
  * 2. If not found locally, it performs a comprehensive live search across all configured Parcelninja stores.
  * 3. It prioritizes the live search based on the first letter of the search term.
  * 4. It also looks for related inbound shipments for any found outbound record.
+ * 5. It allows filtering the search by direction (inbound/outbound).
  */
 
 import { ai } from '@/ai/genkit';
@@ -61,11 +62,11 @@ const lookupShipmentFlow = ai.defineFlow(
     inputSchema: LookupShipmentInputSchema,
     outputSchema: LookupShipmentOutputSchema,
   },
-  async ({ sourceStoreOrderId, storeName }) => {
+  async ({ sourceStoreOrderId, storeName, direction = 'all' }) => {
     const searchTerm = sourceStoreOrderId;
     // --- Pass 1: Search Local Firestore Database ---
     console.log(`Starting Pass 1 (Local Firestore Search) for "${searchTerm}"...`);
-    let foundRecord = await searchFirestoreDatabase(searchTerm);
+    let foundRecord = await searchFirestoreDatabase(searchTerm, direction);
     
     if (foundRecord) {
         console.log(`Record found in local Firestore database.`);
@@ -77,10 +78,10 @@ const lookupShipmentFlow = ai.defineFlow(
                 const returnId = `RET-${numericId}`;
                 console.log(`Outbound found, searching for related inbound: ${returnId}`);
                 // Search for the related inbound, starting with local database
-                relatedInbound = await searchFirestoreDatabase(returnId);
+                relatedInbound = await searchFirestoreDatabase(returnId, 'inbound');
                 if(!relatedInbound){
                      // If not in database, try live API
-                     relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
+                     relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound')) as Inbound | null;
                      if(relatedInbound) await saveRecordToFirestore(relatedInbound);
                 }
              }
@@ -94,14 +95,14 @@ const lookupShipmentFlow = ai.defineFlow(
     const toDateRecent = new Date();
     const fromDateRecent = new Date(toDateRecent);
     fromDateRecent.setDate(toDateRecent.getDate() - 90);
-    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName);
+    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName, direction);
 
     // --- Pass 3: Historical Live Search (if not found in recent) ---
     if (!foundRecord) {
         console.log(`Not found in recent data. Starting Pass 3 (Historical Live Search) for "${searchTerm}"...`);
         const fromDateHistorical = new Date('2014-01-01');
         const toDateHistorical = new Date('2030-01-01');
-        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical, storeName);
+        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical, storeName, direction);
     }
     
     let relatedInbound: Inbound | null = null;
@@ -115,7 +116,7 @@ const lookupShipmentFlow = ai.defineFlow(
           if (numericId) {
               const returnId = `RET-${numericId}`;
               console.log(`Outbound found, searching for related inbound: ${returnId}`);
-              relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'))) as Inbound | null;
+              relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound')) as Inbound | null;
               if (relatedInbound) {
                 console.log(`Found related inbound: ${relatedInbound['Shipment ID']}`);
                 await saveRecordToFirestore(relatedInbound);
@@ -138,7 +139,7 @@ const lookupShipmentFlow = ai.defineFlow(
 /**
  * Performs the actual live search logic for a given date range.
  */
-async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date, storeName?: string): Promise<Shipment | Inbound | null> {
+async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date, storeName?: string, direction: 'all' | 'inbound' | 'outbound' = 'all'): Promise<Shipment | Inbound | null> {
     
     let storesToSearch = STORES;
     if (storeName && storeName !== 'All') {
@@ -159,30 +160,36 @@ async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Dat
     for (const creds of storesToSearch) {
         console.log(`[${creds.name}] Live searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
         
-        // 1. Exact ID lookup for Outbounds
-        let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data && data.id) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
+        // Search Outbounds
+        if (direction === 'all' || direction === 'outbound') {
+            // 1. Exact ID lookup for Outbounds
+            let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
+            if (data && data.id) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
 
-        // 2. Exact ID lookup for Inbounds
-        data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
-        if (data && data.id) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
-        
-        // 3. General search for Outbounds (including by Channel ID)
-        const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}&channelId=${encodeURIComponent(searchTerm)}`;
-        data = await fetchFromParcelNinja(outboundSearchUrl, creds.name, creds);
-        if (data && data.outbounds && data.outbounds.length > 0) {
-            const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}/events`;
-            const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
+            // 2. General search for Outbounds (including by Channel ID)
+            const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}&channelId=${encodeURIComponent(searchTerm)}`;
+            data = await fetchFromParcelNinja(outboundSearchUrl, creds.name, creds);
+            if (data && data.outbounds && data.outbounds.length > 0) {
+                const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}/events`;
+                const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
+                if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
+            }
         }
         
-        // 4. General search for Inbounds
-        const inboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
-        data = await fetchFromParcelNinja(inboundSearchUrl, creds.name, creds);
-        if (data && data.inbounds && data.inbounds.length > 0) {
-            const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}/events`;
-            const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
-            if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
+        // Search Inbounds
+        if (direction === 'all' || direction === 'inbound') {
+            // 3. Exact ID lookup for Inbounds
+            let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, { 'X-Client-Id': searchTerm });
+            if (data && data.id) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
+
+            // 4. General search for Inbounds
+            const inboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
+            data = await fetchFromParcelNinja(inboundSearchUrl, creds.name, creds);
+            if (data && data.inbounds && data.inbounds.length > 0) {
+                const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}/events`;
+                const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds);
+                if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
+            }
         }
     }
     return null;
@@ -198,7 +205,6 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
     const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
     const docId = String(record.id);
     
-    // Using admin SDK methods, no need to import collection/doc from client SDK
     const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
     
     const dataToSave = { ...record, updatedAt: new Date().toISOString() };
@@ -213,38 +219,41 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
 /**
  * Searches the Firestore database for a matching record.
  */
-async function searchFirestoreDatabase(searchTerm: string): Promise<Shipment | Inbound | null> {
+async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'inbound' | 'outbound'): Promise<Shipment | Inbound | null> {
     const { firestore } = initializeFirebaseOnServer();
     const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
     const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
     const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
-    // Try to get by document ID first
-    const shipmentDocRef = shipmentsRef.doc(searchTerm);
-    const shipmentSnap = await shipmentDocRef.get();
-    if(shipmentSnap.exists) return { id: shipmentSnap.id, ...shipmentSnap.data() } as Shipment;
-
-    const inboundDocRef = inboundsRef.doc(searchTerm);
-    const inboundSnap = await inboundDocRef.get();
-    if(inboundSnap.exists) return { id: inboundSnap.id, ...inboundSnap.data() } as Inbound;
-    
-    // Fallback to querying fields if not found by ID
     const fieldsToSearch = ['Source Store Order ID', 'Customer Name', 'Tracking No', 'Channel ID'];
-    for (const field of fieldsToSearch) {
-        const shipmentQuery = shipmentsRef.where(field, '==', searchTerm);
-        const shipmentQuerySnap = await shipmentQuery.get();
-        if(!shipmentQuerySnap.empty) {
-            const doc = shipmentQuerySnap.docs[0];
-            return { id: doc.id, ...doc.data() } as Shipment;
-        }
 
-        const inboundQuery = inboundsRef.where(field, '==', searchTerm);
-        const inboundQuerySnap = await inboundQuery.get();
-        if(!inboundQuerySnap.empty) {
-            const doc = inboundQuerySnap.docs[0];
-            return { id: doc.id, ...doc.data() } as Inbound;
+    const searchCollection = async (ref: admin.firestore.CollectionReference) => {
+        // Try to get by document ID first
+        const docRef = ref.doc(searchTerm);
+        const snap = await docRef.get();
+        if(snap.exists) return { id: snap.id, ...snap.data() };
+
+        // Fallback to querying fields
+        for (const field of fieldsToSearch) {
+            const query = ref.where(field, '==', searchTerm);
+            const querySnap = await query.get();
+            if(!querySnap.empty) {
+                const doc = querySnap.docs[0];
+                return { id: doc.id, ...doc.data() };
+            }
         }
+        return null;
+    }
+
+    if (direction === 'all' || direction === 'outbound') {
+        const shipmentResult = await searchCollection(shipmentsRef);
+        if (shipmentResult) return shipmentResult as Shipment;
+    }
+    
+    if (direction === 'all' || direction === 'inbound') {
+        const inboundResult = await searchCollection(inboundsRef);
+        if (inboundResult) return inboundResult as Inbound;
     }
 
     return null;

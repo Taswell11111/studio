@@ -6,7 +6,7 @@ config();
 /**
  * @fileOverview A Genkit flow to perform a batch lookup of multiple shipments.
  * It takes an array of search terms and searches for each one in parallel,
- * with an option to filter by specific stores.
+ * with an option to filter by specific stores and direction (inbound/outbound).
  */
 
 import { ai } from '@/ai/genkit';
@@ -31,7 +31,7 @@ const multiLookupShipmentFlow = ai.defineFlow(
     inputSchema: MultiLookupShipmentInputSchema,
     outputSchema: MultiLookupShipmentOutputSchema,
   },
-  async ({ searchTerms, storeNames }) => {
+  async ({ searchTerms, storeNames, direction }) => {
     const results: ShipmentRecord[] = [];
     const notFound: string[] = [];
 
@@ -39,10 +39,10 @@ const multiLookupShipmentFlow = ai.defineFlow(
     // Otherwise, run a general lookup without a specific store.
     const lookupPromises = storeNames && storeNames.length > 0
       ? searchTerms.flatMap(term => 
-          storeNames.map(storeName => lookupShipment({ sourceStoreOrderId: term, storeName }))
+          storeNames.map(storeName => lookupShipment({ sourceStoreOrderId: term, storeName, direction }))
         )
       : searchTerms.map(term => 
-          lookupShipment({ sourceStoreOrderId: term })
+          lookupShipment({ sourceStoreOrderId: term, direction })
         );
 
     try {

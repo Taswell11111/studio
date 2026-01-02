@@ -2,10 +2,11 @@
 'use server';
 
 import { syncRecentShipments } from '@/ai/flows/sync-recent-shipments';
-import { testParcelninjaConnection } from '@/ai/flows/test-parcelninja-connection';
+import { testParcelninjaConnectionFlow } from '@/ai/flows/test-parcelninja-connection';
 import { multiLookupShipment } from '@/ai/flows/multi-lookup-shipment';
 import { getAllRecords } from '@/ai/flows/get-all-records';
 import type { MultiLookupShipmentInput, MultiLookupShipmentOutput, ShipmentRecord } from '@/types';
+import { ai } from '@/ai/genkit';
 
 
 /**
@@ -51,19 +52,32 @@ export async function refreshAllShipmentsAction() {
 
 /**
  * Server action to test the connection to the Parcelninja API for all configured stores.
+ * This action now correctly returns a ReadableStream for live log updates.
  */
-export async function testConnectionsAction() {
+export async function testConnectionsAction(): Promise<Response> {
   try {
-    const result = await testParcelninjaConnection();
-    // Return the result directly as it matches the expected structure.
-    return result; 
+    const stream = new ReadableStream({
+      async start(controller) {
+        // Correctly call the flow which is an async generator
+        const flowStream = testParcelninjaConnectionFlow();
+        const encoder = new TextEncoder();
+
+        for await (const chunk of flowStream) {
+          controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n'));
+        }
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
   } catch (error: any) {
     console.error("Critical error in testConnectionsAction:", error);
-    return {
-      results: [],
-      logs: ['A critical error occurred during connection test.'],
-      error: error.message || 'An unknown server error occurred during connection test.',
-    }
+    return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 

@@ -12,17 +12,22 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from './status-badge';
-import { AlertCircle, Search, Download, CircleDotDashed, Info, Store, X, Check } from 'lucide-react';
+import { AlertCircle, Search, Download, CircleDotDashed, Info, Store, X, Check, ArchiveRestore, Truck } from 'lucide-react';
 import { ProcessingModal } from './processing-modal';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+
+
+type SearchDirection = 'all' | 'inbound' | 'outbound';
 
 export function MultiSearchTab() {
   const [searchTerms, setSearchTerms] = useState('');
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  const [searchDirection, setSearchDirection] = useState<SearchDirection>('all');
   const [results, setResults] = useState<ShipmentRecord[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);
   const [isSearching, startSearchTransition] = useTransition();
@@ -49,7 +54,8 @@ export function MultiSearchTab() {
       try {
         const response = await multiLookupShipmentAction({ 
           searchTerms: terms,
-          storeNames: selectedStores 
+          storeNames: selectedStores,
+          direction: searchDirection,
         });
         setResults(response.results);
         setNotFound(response.notFound);
@@ -103,7 +109,7 @@ export function MultiSearchTab() {
       <ProcessingModal isOpen={isSearching} title="Performing Multi-Search..." description="This may take a moment." />
       <Card className="p-4 sm:p-6 mt-6">
         <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 items-center">
                 <Popover>
                     <PopoverTrigger asChild>
                     <Button
@@ -154,7 +160,17 @@ export function MultiSearchTab() {
                     </PopoverContent>
                 </Popover>
 
-                {selectedStores.length > 0 && (
+                <ToggleGroup type="single" value={searchDirection} onValueChange={(value: SearchDirection) => value && setSearchDirection(value)} className="ml-auto" size="sm">
+                    <ToggleGroupItem value="outbound" aria-label="Search outbounds only">
+                        <Truck className="h-4 w-4 mr-2" /> Outbound
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="inbound" aria-label="Search inbounds only">
+                        <ArchiveRestore className="h-4 w-4 mr-2" /> Inbound
+                    </ToggleGroupItem>
+                </ToggleGroup>
+            </div>
+            
+            {selectedStores.length > 0 && (
                     <div className="flex items-center gap-1 flex-wrap">
                         {selectedStores.map(store => (
                             <Badge key={store} variant="secondary" className="gap-1">
@@ -166,8 +182,7 @@ export function MultiSearchTab() {
                         ))}
                     </div>
                 )}
-            </div>
-            
+
           <Textarea
             placeholder="Enter comma or newline separated search terms..."
             className="h-32 text-base"
@@ -181,7 +196,7 @@ export function MultiSearchTab() {
                     You can search by any of the following fields. Provide one or more values, separated by commas or newlines.
                     <ul className="list-disc pl-5 space-y-1 mt-2">
                         <li><b>Order ID:</b> The unique identifier for a shipment. e.g., `SHP-12345` or `RET-54321`</li>
-                        <li><b>Channel ID:</b> The ID from the originating sales channel. e.g., `H10598`, `D23455`</li>
+                        <li><b>Channel ID:</b> The ID from the originating sales channel (Outbound only). e.g., `H10598`, `D23455`</li>
                         <li><b>Customer Name:</b> The full name of the customer. e.g., `John Doe`</li>
                         <li><b>Tracking Number:</b> The courier's tracking number. e.g., `PNJ12345678`</li>
                     </ul>
