@@ -278,7 +278,7 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
         : data.status;
 
     const status = latestEvent?.description || 'Unknown';
-    const statusDate = latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date().toISOString();
+    const statusDate = latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date();
   
   const baseRecord = {
     'Direction': direction,
@@ -286,14 +286,14 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
     'Source Store': storeName,
     'Source Store Order ID': String(data.clientId || ''),
     'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
-    'Order Date': data.createDate ? formatApiDate(data.createDate) : new Date().toISOString(),
+    'Order Date': (data.createDate ? formatApiDate(data.createDate) : new Date()).toISOString(),
     'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
     'Email': data.deliveryInfo?.email || '',
     'Status': status,
     'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
     'Courier': data.deliveryInfo?.courierName || storeName,
     'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
-    'Status Date': statusDate,
+    'Status Date': statusDate.toISOString(),
     'Address Line 1': data.deliveryInfo?.addressLine1 || '',
     'Address Line 2': data.deliveryInfo?.addressLine2 || '',
     'City': data.deliveryInfo?.suburb || '',
@@ -309,8 +309,8 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
   return finalRecord;
 }
 
-function formatApiDate(dateStr: string): string {
-  if (!dateStr || dateStr.length < 8) return new Date().toISOString();
+function formatApiDate(dateStr: string): Date {
+  if (!dateStr || dateStr.length < 8) return new Date();
   try {
     const year = parseInt(dateStr.substring(0, 4), 10);
     const month = parseInt(dateStr.substring(4, 6), 10) - 1;
@@ -319,12 +319,14 @@ function formatApiDate(dateStr: string): string {
       const hour = parseInt(dateStr.substring(8, 10), 10);
       const minute = parseInt(dateStr.substring(10, 12), 10);
       const second = parseInt(dateStr.substring(12, 14), 10);
-      return new Date(Date.UTC(year, month, day, hour, minute, second)).toISOString();
+      return new Date(Date.UTC(year, month, day, hour, minute, second));
     }
-    return new Date(Date.UTC(year, month, day)).toISOString();
+    return new Date(Date.UTC(year, month, day));
   } catch (e) {
-    return new Date().toISOString();
+    return new Date();
   }
 }
+
+    
 
     
