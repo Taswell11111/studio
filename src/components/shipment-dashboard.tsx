@@ -2,9 +2,6 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
-import type { Shipment, Inbound, ShipmentRecord } from '@/types';
-import { initializeFirebase } from '@/firebase';
-import { collection, getCountFromServer, getDocs, limit, query, orderBy } from 'firebase/firestore';
 import { exportAllRecordsAction, testConnectionsAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,14 +19,20 @@ import { LogViewer } from './log-viewer';
 export default function ShipmentDashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTitle, setProcessingTitle] = useState('');
-  const [recordsCount, setRecordsCount] = useState<number | null>(null);
-  const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
   const [isExporting, startExportTransition] = useTransition();
   const { toast } = useToast();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTestingConnection, startTestConnectionTransition] = useTransition();
   const [testConnectionLogs, setTestConnectionLogs] = useState<string[]>([]);
+  const [isAppLoading, setIsAppLoading] = useState(true);
 
+  useEffect(() => {
+    // Simulate app loading without fetching data
+    const timer = setTimeout(() => {
+      setIsAppLoading(false);
+    }, 500); 
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleExportAll = () => {
     startExportTransition(async () => {
@@ -118,7 +121,10 @@ export default function ShipmentDashboard() {
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line);
-              setTestConnectionLogs(prev => [...prev, parsed.log]);
+              // The flow now returns chunks with a 'logs' array, so we append them.
+              if (parsed.logs && Array.isArray(parsed.logs)) {
+                setTestConnectionLogs(prev => [...prev, ...parsed.logs]);
+              }
             } catch (e) {
               console.warn("Could not parse log line:", line);
             }
@@ -129,34 +135,6 @@ export default function ShipmentDashboard() {
       }
     });
   }
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const { firestore: db } = initializeFirebase();
-        const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
-        const shipmentsColRef = collection(db, `artifacts/${appId}/public/data/shipments`);
-        const snapshot = await getCountFromServer(shipmentsColRef);
-        setRecordsCount(snapshot.data().count);
-        
-        const q = query(shipmentsColRef, orderBy('Status Date', 'desc'), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            const docData = querySnapshot.docs[0].data();
-            if(docData['Status Date']) {
-                 setLastSyncDate(new Date(docData['Status Date']).toLocaleString());
-            }
-        } else {
-             setLastSyncDate('No records found');
-        }
-      } catch (err) {
-        console.error("Failed to fetch record stats", err);
-        setRecordsCount(0);
-        setLastSyncDate('Error fetching stats');
-      }
-    }
-    fetchStats();
-  }, []);
 
   return (
     <>
@@ -192,24 +170,15 @@ export default function ShipmentDashboard() {
             </div>
             
              <div className="flex items-center gap-2 flex-wrap justify-center self-center md:self-auto">
-                {recordsCount !== null ? (
-                    <div className="hidden lg:flex items-center mr-4 border-r pr-4 gap-4">
-                        <div className='flex flex-col items-end text-xs text-muted-foreground'>
-                            <div className="flex items-center gap-1 font-semibold text-foreground">
-                                <Database className="w-3 h-3" />
-                                {recordsCount.toLocaleString()} Records
-                            </div>
-                            {lastSyncDate && <span>Latest: {lastSyncDate}</span>}
-                        </div>
-                        <Button variant="outline" size="sm" onClick={handleExportAll} disabled={isExporting}>
-                            <Download className="mr-2 h-4 w-4" />
-                            {isExporting ? 'Exporting...' : 'Download All'}
-                        </Button>
-                    </div>
-                ) : null}
+                <div className="hidden lg:flex items-center mr-4 border-r pr-4 gap-4">
+                    <Button variant="outline" size="sm" onClick={handleExportAll} disabled={isExporting}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {isExporting ? 'Exporting...' : 'Download All'}
+                    </Button>
+                </div>
               
                <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary/20 rounded-full border border-secondary/20" title="System Status">
-                   {recordsCount === null ? (
+                   {isAppLoading ? (
                        <>
                           <div className="w-2.5 h-2.5 bg-gray-400 rounded-full"></div>
                           <span className="text-xs font-medium text-muted-foreground">Loading...</span>

@@ -54,7 +54,7 @@ export function MultiSearchTab() {
       try {
         const response = await multiLookupShipmentAction({ 
           searchTerms: terms,
-          storeNames: selectedStores,
+          storeNames: selectedStores.length > 0 ? selectedStores : undefined,
           direction: searchDirection,
         });
         setResults(response.results);
@@ -91,7 +91,7 @@ export function MultiSearchTab() {
       ].join(','))
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-s-8,' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8,' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -180,6 +180,7 @@ export function MultiSearchTab() {
                                 </button>
                             </Badge>
                         ))}
+                         <Button variant="ghost" size="sm" className="h-auto text-xs p-1" onClick={() => setSelectedStores([])}>Clear All</Button>
                     </div>
                 )}
 
