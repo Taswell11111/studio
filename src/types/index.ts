@@ -100,6 +100,7 @@ export const LookupShipmentInputSchema = z.object({
   sourceStoreOrderId: z.string().describe('The Order ID from the source store.'),
   storeName: z.string().optional().describe('The specific store to search in.'),
   direction: z.enum(['all', 'inbound', 'outbound']).optional().describe('The direction to search in.'),
+  abortSignal: z.any().optional().describe('An AbortSignal to cancel the operation.'),
 });
 export type LookupShipmentInput = z.infer<typeof LookupShipmentInputSchema>;
 
@@ -115,6 +116,7 @@ export const MultiLookupShipmentInputSchema = z.object({
   searchTerms: z.array(z.string()).describe('An array of search terms (e.g., order IDs).'),
   storeNames: z.array(z.string()).optional().describe('An optional array of store names to filter the search.'),
   direction: z.enum(['all', 'inbound', 'outbound']).optional().describe('The direction to search in.'),
+  abortSignal: z.any().optional().describe('An AbortSignal to cancel the operation.'),
 });
 export type MultiLookupShipmentInput = z.infer<typeof MultiLookupShipmentInputSchema>;
 

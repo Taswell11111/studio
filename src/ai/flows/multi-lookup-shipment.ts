@@ -31,61 +31,60 @@ const multiLookupShipmentFlow = ai.defineFlow(
     inputSchema: MultiLookupShipmentInputSchema,
     outputSchema: MultiLookupShipmentOutputSchema,
   },
-  async ({ searchTerms, storeNames, direction }) => {
+  async ({ searchTerms, storeNames, direction, abortSignal }) => {
     const results: ShipmentRecord[] = [];
     const notFound: string[] = [];
 
-    // If specific stores are selected, run lookups for each of them.
-    // Otherwise, run a general lookup without a specific store.
-    const lookupPromises = storeNames && storeNames.length > 0
-      ? searchTerms.flatMap(term => 
-          storeNames.map(storeName => lookupShipment({ sourceStoreOrderId: term, storeName, direction }))
-        )
-      : searchTerms.map(term => 
-          lookupShipment({ sourceStoreOrderId: term, direction })
-        );
+    const lookupPromises = searchTerms.map(term => 
+        lookupShipment({ 
+            sourceStoreOrderId: term, 
+            storeNames: storeNames && storeNames.length > 0 ? storeNames : undefined,
+            direction,
+            abortSignal,
+        })
+    );
 
     try {
         const responses = await Promise.all(lookupPromises);
+        
+        if (abortSignal?.aborted) {
+          throw new Error('Flow aborted');
+        }
 
-        // This map will store the original search term for each found shipment ID.
-        // It helps associate results back to the original query when notFound is calculated.
         const foundShipmentTermMap = new Map<string, string>();
 
-        responses.forEach((response) => {
+        responses.forEach((response, index) => {
+            const originalTerm = searchTerms[index];
             if (response.shipment) {
-                // Check for duplicates before adding
                 if (!results.some(r => r.id === response.shipment!.id)) {
                     results.push(response.shipment);
                 }
-                 // Also add related inbound if it exists and is not already in results
                 if (response.relatedInbound && !results.some(r => r.id === response.relatedInbound!.id)) {
                     results.push(response.relatedInbound);
                 }
-
-                // Map the found shipment ID back to its original search term.
-                // This logic is simplified; a direct lookup returns the same term.
-                // For a broader search, this mapping would be more complex.
-                const originalTerm = searchTerms.find(st => String(response.shipment?.['Shipment ID']).includes(st) || String(response.shipment?.['Source Store Order ID']).includes(st));
-                if(originalTerm) {
-                    foundShipmentTermMap.set(originalTerm, response.shipment.id);
-                }
+                foundShipmentTermMap.set(originalTerm, response.shipment.id);
+            } else {
+                notFound.push(originalTerm);
             }
         });
         
-        // Determine which of the original search terms were not found.
-        const foundTerms = new Set(Array.from(foundShipmentTermMap.keys()));
-        const notFoundTerms = searchTerms.filter(term => !foundTerms.has(term));
-
-        // Deduplicate results based on 'id' to handle cases where a term is found in multiple selected stores.
         const uniqueResults = Array.from(new Map(results.map(item => [item.id, item])).values());
 
         return {
             results: uniqueResults,
-            notFound: notFoundTerms,
+            notFound: notFound,
         };
 
     } catch (error: any) {
+        if (error.name === 'AbortError' || error.message === 'Flow aborted') {
+            console.log('Multi-lookup flow was aborted.');
+            // Return what we have so far, if anything.
+            return {
+                results: [],
+                notFound: searchTerms,
+                error: 'Search was aborted by user.',
+            };
+        }
         console.error("Error in multi-lookup flow:", error);
         return {
             results: [],

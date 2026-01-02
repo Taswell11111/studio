@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useRef } from 'react';
 import type { Shipment, Inbound } from '@/types';
 import { lookupShipment } from '@/ai/flows/lookup-shipment';
 import { STORES } from '@/lib/stores';
@@ -27,6 +27,8 @@ export function SingleSearchTab() {
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [lastSearchedTerm, setLastSearchedTerm] = useState('');
+  const [logs, setLogs] = useState<string[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
   
   const { toast } = useToast();
 
@@ -37,14 +39,26 @@ export function SingleSearchTab() {
     
     setLastSearchedTerm(trimmedSearch);
 
+    // If there's an ongoing search, abort it first
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    
     startSearchTransition(async () => {
       setSearchResult(null); // Clear previous result
+      setLogs([]); // Clear logs
       try {
         const result = await lookupShipment({ 
             sourceStoreOrderId: trimmedSearch,
             storeName: selectedStore === 'All' ? undefined : selectedStore,
         });
         
+        if (abortControllerRef.current?.signal.aborted) {
+            console.log("Search was aborted by the user.");
+            return;
+        }
+
         if (result.shipment) {
           setSearchResult({ shipment: result.shipment, relatedInbound: result.relatedInbound });
           toast({
@@ -59,14 +73,30 @@ export function SingleSearchTab() {
           });
         }
       } catch (err: any) {
-        console.error("Search error:", err);
-        toast({
-          variant: "destructive",
-          title: "Search Error",
-          description: "An unexpected error occurred while searching.",
-        });
+        if (err.name === 'AbortError') {
+            toast({
+                variant: 'default',
+                title: 'Search Aborted',
+                description: 'The search operation was cancelled.',
+            });
+        } else {
+            console.error("Search error:", err);
+            toast({
+                variant: "destructive",
+                title: "Search Error",
+                description: "An unexpected error occurred while searching.",
+            });
+        }
+      } finally {
+        abortControllerRef.current = null;
       }
     });
+  };
+  
+  const handleAbort = () => {
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
   };
 
   const DisplayCard = () => {
@@ -95,7 +125,12 @@ export function SingleSearchTab() {
 
   return (
     <>
-      <ProcessingModal isOpen={isSearching} title="Searching Warehouses..." />
+      <ProcessingModal 
+        isOpen={isSearching} 
+        title="Searching Warehouses..."
+        onAbort={handleAbort}
+        logs={logs}
+      />
       <Card className="p-4 sm:p-6 mt-6">
         <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-grow">

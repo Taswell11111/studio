@@ -110,25 +110,34 @@ export default function ShipmentDashboard() {
       setIsSettingsOpen(true);
       try {
         const response = await testConnectionsAction();
-        const reader = response.body.getReader();
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("Could not get stream reader.");
         const decoder = new TextDecoder();
         
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n').filter(line => line.trim());
-          for (const line of lines) {
-            try {
-              const parsed = JSON.parse(line);
-              // The flow now returns chunks with a 'logs' array, so we append them.
-              if (parsed.logs && Array.isArray(parsed.logs)) {
-                setTestConnectionLogs(prev => [...prev, ...parsed.logs]);
+          const chunk = decoder.decode(value, { stream: true });
+          // Handle streaming JSON objects, which may be split across chunks
+          chunk.split('\n\n').forEach(line => {
+              if (line.trim()) {
+                  try {
+                      const parsed = JSON.parse(line);
+                      if (parsed.log) {
+                          setTestConnectionLogs(prev => [...prev, parsed.log]);
+                      }
+                      if (parsed.result) {
+                          const { storeName, success, error } = parsed.result;
+                          const logMsg = success 
+                              ? `✅ ${storeName}: SUCCESS` 
+                              : `❌ ${storeName}: FAILED - ${error || 'Unknown error'}`;
+                          setTestConnectionLogs(prev => [...prev, logMsg]);
+                      }
+                  } catch (e) {
+                      console.warn("Could not parse log line:", line);
+                  }
               }
-            } catch (e) {
-              console.warn("Could not parse log line:", line);
-            }
-          }
+          });
         }
       } catch (error: any) {
          setTestConnectionLogs(prev => [...prev, `Error: ${error.message}`]);
@@ -200,9 +209,9 @@ export default function ShipmentDashboard() {
         </Card>
 
         <Tabs defaultValue="single-search" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="single-search">Single Search</TabsTrigger>
-                <TabsTrigger value="multi-search">Multi-Search</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 h-12">
+                <TabsTrigger value="single-search" className="text-base">Single-Search</TabsTrigger>
+                <TabsTrigger value="multi-search" className="text-base">Multi-Search</TabsTrigger>
             </TabsList>
             <TabsContent value="single-search">
                 <SingleSearchTab />

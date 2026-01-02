@@ -6,7 +6,6 @@ import { testParcelninjaConnectionFlow } from '@/ai/flows/test-parcelninja-conne
 import { multiLookupShipment } from '@/ai/flows/multi-lookup-shipment';
 import { getAllRecords } from '@/ai/flows/get-all-records';
 import type { MultiLookupShipmentInput, MultiLookupShipmentOutput, ShipmentRecord } from '@/types';
-import { ai } from '@/ai/genkit';
 
 
 /**
@@ -56,21 +55,29 @@ export async function refreshAllShipmentsAction() {
  */
 export async function testConnectionsAction(): Promise<Response> {
   try {
-    const stream = new ReadableStream({
+    // This is now a streaming flow. ai.runFlow returns an async generator.
+    const flowStream = testParcelninjaConnectionFlow();
+    
+    const readableStream = new ReadableStream({
       async start(controller) {
-        // Correctly call the flow which is an async generator
-        const flowStream = testParcelninjaConnectionFlow();
         const encoder = new TextEncoder();
-
-        for await (const chunk of flowStream) {
-          controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n'));
+        try {
+          for await (const chunk of flowStream) {
+            // Each chunk is an object from the flow's output stream
+            controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+          }
+        } catch (e: any) {
+           console.error("Error in stream processing:", e);
+           const errorChunk = { error: e.message || "An unknown stream error occurred." };
+           controller.enqueue(encoder.encode(JSON.stringify(errorChunk) + '\n\n'));
+        } finally {
+            controller.close();
         }
-        controller.close();
       },
     });
 
-    return new Response(stream, {
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    return new Response(readableStream, {
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
     console.error("Critical error in testConnectionsAction:", error);
@@ -81,11 +88,14 @@ export async function testConnectionsAction(): Promise<Response> {
   }
 }
 
+
 /**
  * Server action to perform a multi-shipment lookup.
  */
 export async function multiLookupShipmentAction(input: MultiLookupShipmentInput): Promise<MultiLookupShipmentOutput> {
     try {
+        // Since we cannot pass AbortSignal to server action, we just call the flow.
+        // The flow itself won't be abortable from the client, but the client can stop listening.
         return await multiLookupShipment(input);
     } catch (error: any) {
         console.error("Critical error in multiLookupShipmentAction:", error);
@@ -96,6 +106,7 @@ export async function multiLookupShipmentAction(input: MultiLookupShipmentInput)
         };
     }
 }
+
 
 /**
  * Server action to fetch all records from the database for export.

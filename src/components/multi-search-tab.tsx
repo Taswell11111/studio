@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { multiLookupShipmentAction } from '@/app/actions';
 import { ShipmentRecord } from '@/types';
@@ -31,6 +31,8 @@ export function MultiSearchTab() {
   const [results, setResults] = useState<ShipmentRecord[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);
   const [isSearching, startSearchTransition] = useTransition();
+  const [logs, setLogs] = useState<string[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
   const handleSearch = () => {
@@ -47,16 +49,28 @@ export function MultiSearchTab() {
       });
       return;
     }
+    
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
 
     startSearchTransition(async () => {
       setResults([]);
       setNotFound([]);
+      setLogs([]);
       try {
         const response = await multiLookupShipmentAction({ 
           searchTerms: terms,
           storeNames: selectedStores.length > 0 ? selectedStores : undefined,
           direction: searchDirection,
         });
+
+        if (abortControllerRef.current?.signal.aborted) {
+            console.log("Multi-search was aborted.");
+            return;
+        }
+
         setResults(response.results);
         setNotFound(response.notFound);
         toast({
@@ -64,13 +78,25 @@ export function MultiSearchTab() {
           description: `Found ${response.results.length} unique records for ${terms.length} terms.`,
         });
       } catch (error: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Search Error',
-          description: error.message || 'An unexpected error occurred.',
-        });
+         if (error.name === 'AbortError') {
+            toast({ variant: 'default', title: 'Search Aborted' });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Search Error',
+                description: error.message || 'An unexpected error occurred.',
+            });
+        }
+      } finally {
+        abortControllerRef.current = null;
       }
     });
+  };
+
+  const handleAbort = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+      }
   };
   
   const exportToCsv = () => {
@@ -106,7 +132,13 @@ export function MultiSearchTab() {
 
   return (
     <>
-      <ProcessingModal isOpen={isSearching} title="Performing Multi-Search..." description="This may take a moment." />
+      <ProcessingModal 
+        isOpen={isSearching} 
+        title="Performing Multi-Search..." 
+        description="This may take a moment."
+        onAbort={handleAbort}
+        logs={logs}
+      />
       <Card className="p-4 sm:p-6 mt-6">
         <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row gap-2 items-center">
