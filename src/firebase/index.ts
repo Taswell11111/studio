@@ -49,7 +49,7 @@ export function initializeFirebase(): FirebaseServices {
   firebaseServices = {
     firebaseApp: app,
     auth: getAuth(app),
-    firestore: getFirestore(app, 'shipment-look'),
+    firestore: getFirestore(app),
     storage: getStorage(app),
   };
 

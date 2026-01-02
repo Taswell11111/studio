@@ -12,7 +12,10 @@ import { getFirestore as getAdminFirestore, Firestore as AdminFirestore } from '
 export function initializeFirebaseOnServer(): { firestore: AdminFirestore } {
     if (admin.apps.length === 0) {
          try {
-            admin.initializeApp();
+            // Initialize with explicit project ID to avoid ambiguity.
+            admin.initializeApp({
+                projectId: firebaseConfig.projectId,
+            });
          } catch (error: any) {
              console.error('Firebase Admin SDK initialization failed:', error.message);
              // Re-throwing the error to make it clear that the server cannot proceed
@@ -21,10 +24,8 @@ export function initializeFirebaseOnServer(): { firestore: AdminFirestore } {
          }
     }
   
-  // Return the default Firestore instance.
-  // The databaseId 'shipment-look' was likely causing the 'NOT_FOUND' error 
-  // if the project is using the default '(default)' database.
-  // When no databaseId is provided to getAdminFirestore(), it uses the default one.
+  // The client is configured to use the '(default)' database.
+  // We must explicitly connect to the same database on the server.
   return {
     firestore: getAdminFirestore(),
   };
