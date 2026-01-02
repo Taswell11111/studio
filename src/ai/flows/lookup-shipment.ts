@@ -6,11 +6,6 @@ config();
 /**
  * @fileOverview A Genkit flow to look up shipment details.
  * This is now a streaming flow that yields logs and the final result.
- * 1. It first queries the local Firestore database for a quick result.
- * 2. If not found locally, it performs a comprehensive live search across all configured Parcelninja stores.
- * 3. It prioritizes the live search based on the first letter of the search term.
- * 4. It also looks for related inbound shipments for any found outbound record.
- * 5. It allows filtering the search by direction (inbound/outbound).
  */
 
 import { ai } from '@/ai/genkit';
@@ -69,6 +64,7 @@ export const lookupShipmentFlow = ai.defineFlow(
     try {
       foundRecord = await searchFirestoreDatabase(searchTerm, direction);
     } catch (e: any) {
+        console.error("Firestore search error:", e);
         yield { result: { shipment: null, relatedInbound: null, error: `Local database search failed: ${e.message}` } };
         return;
     }
@@ -140,6 +136,7 @@ export const lookupShipmentFlow = ai.defineFlow(
       return;
     }
 
+    // Explicitly yield failure if nothing found
     yield { result: { shipment: null, relatedInbound: null, error: `Record not found in ${storeName || 'any configured'} warehouse store or local database.` } };
   }
 );
@@ -214,6 +211,7 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
     const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
     const docId = String(record.id);
     
+    // Use Firestore methods from the admin SDK (Firestore instance)
     const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
     
     const dataToSave = { ...record, updatedAt: new Date().toISOString() };
@@ -224,6 +222,14 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
     console.error("Failed to save API-found record to Firestore:", dbError);
   }
 }
+
+const toISOStringIfTimestamp = (value: any): string | any => {
+  if (value && typeof value === 'object' && value.hasOwnProperty('_seconds')) {
+    // This is a Firestore Timestamp
+    return new Date(value._seconds * 1000).toISOString();
+  }
+  return value;
+};
 
 
 async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'inbound' | 'outbound'): Promise<Shipment | Inbound | null> {
@@ -241,11 +247,12 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
             const docRef = ref.doc(searchTerm);
             const snap = await docRef.get();
             if(snap.exists) {
-                const data = snap.data();
+                let data = snap.data();
                 if (!data) return null;
                 // Convert Timestamps to ISO strings
-                if (data['Order Date'] && data['Order Date'].toDate) data['Order Date'] = data['Order Date'].toDate().toISOString();
-                if (data['Status Date'] && data['Status Date'].toDate) data['Status Date'] = data['Status Date'].toDate().toISOString();
+                data['Order Date'] = toISOStringIfTimestamp(data['Order Date']);
+                data['Status Date'] = toISOStringIfTimestamp(data['Status Date']);
+                data['updatedAt'] = toISOStringIfTimestamp(data['updatedAt']);
                 return { id: snap.id, ...data };
             }
 
@@ -255,11 +262,12 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
                 const querySnap = await query.get();
                 if(!querySnap.empty) {
                     const doc = querySnap.docs[0];
-                    const data = doc.data();
+                    let data = doc.data();
                     if (!data) return null;
                      // Convert Timestamps to ISO strings
-                    if (data['Order Date'] && data['Order Date'].toDate) data['Order Date'] = data['Order Date'].toDate().toISOString();
-                    if (data['Status Date'] && data['Status Date'].toDate) data['Status Date'] = data['Status Date'].toDate().toISOString();
+                    data['Order Date'] = toISOStringIfTimestamp(data['Order Date']);
+                    data['Status Date'] = toISOStringIfTimestamp(data['Status Date']);
+                    data['updatedAt'] = toISOStringIfTimestamp(data['updatedAt']);
                     return { id: doc.id, ...data };
                 }
             }

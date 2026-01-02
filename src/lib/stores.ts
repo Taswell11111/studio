@@ -10,9 +10,8 @@ export type Store = {
     prefix: string;
 };
 
-// This array now securely loads credentials from environment variables.
-// It maps the environment variable names to the store configuration.
-export const STORES: Store[] = [
+// Function to get STORES array to ensure environment variables are evaluated at call time, not import time
+export const getStores = (): Store[] => [
     {
         "name": "DIESEL",
         "apiKey": process.env.DIESEL_WAREHOUSE_API_USERNAME || "",
@@ -49,3 +48,6 @@ export const STORES: Store[] = [
         "prefix": "R"
     }
 ];
+
+// Keep STORES for backwards compatibility, but it might be empty if imported before env vars are set
+export const STORES: Store[] = getStores();

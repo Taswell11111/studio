@@ -36,6 +36,7 @@ export const ShipmentRecordSchema = z.object({
   'Tracking Link': z.string().optional(),
   'Email': z.string().optional(),
   'Channel ID': z.string().optional(),
+  'updatedAt': z.string().optional(),
 }).catchall(z.any());
 
 export type ShipmentRecord = z.infer<typeof ShipmentRecordSchema>;
@@ -155,3 +156,5 @@ export const ConnectionTestStreamChunkSchema = z.object({
     .optional(),
 });
 export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
+
+    
