@@ -92,10 +92,6 @@ export const lookupShipmentFlow = ai.defineFlow(
              }
         }
         
-        // Ensure data is serializable before yielding
-        if (foundRecord) foundRecord = ensureSerializable(foundRecord);
-        if (relatedInbound) relatedInbound = ensureSerializable(relatedInbound);
-
         yield { result: { shipment: foundRecord, relatedInbound } };
         return;
     }
@@ -140,10 +136,6 @@ export const lookupShipmentFlow = ai.defineFlow(
           }
       }
       
-      // Ensure data is serializable before yielding
-      if (foundRecord) foundRecord = ensureSerializable(foundRecord);
-      if (relatedInbound) relatedInbound = ensureSerializable(relatedInbound);
-
       yield { result: { shipment: foundRecord, relatedInbound: relatedInbound } };
       return;
     }
@@ -248,7 +240,14 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
             // Try to get by document ID first
             const docRef = ref.doc(searchTerm);
             const snap = await docRef.get();
-            if(snap.exists) return { id: snap.id, ...snap.data() };
+            if(snap.exists) {
+                const data = snap.data();
+                if (!data) return null;
+                // Convert Timestamps to ISO strings
+                if (data['Order Date'] && data['Order Date'].toDate) data['Order Date'] = data['Order Date'].toDate().toISOString();
+                if (data['Status Date'] && data['Status Date'].toDate) data['Status Date'] = data['Status Date'].toDate().toISOString();
+                return { id: snap.id, ...data };
+            }
 
             // Fallback to querying fields
             for (const field of fieldsToSearch) {
@@ -256,7 +255,12 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
                 const querySnap = await query.get();
                 if(!querySnap.empty) {
                     const doc = querySnap.docs[0];
-                    return { id: doc.id, ...doc.data() };
+                    const data = doc.data();
+                    if (!data) return null;
+                     // Convert Timestamps to ISO strings
+                    if (data['Order Date'] && data['Order Date'].toDate) data['Order Date'] = data['Order Date'].toDate().toISOString();
+                    if (data['Status Date'] && data['Status Date'].toDate) data['Status Date'] = data['Status Date'].toDate().toISOString();
+                    return { id: doc.id, ...data };
                 }
             }
             return null;
@@ -271,7 +275,7 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
             result = await searchCollection(inboundsRef);
         }
         
-        return result ? ensureSerializable(result) : null;
+        return result ? result : null;
         
     } catch(e: any) {
         console.error("CRITICAL: Firestore search failed with error:", e);
@@ -290,87 +294,51 @@ function mapParcelninjaToShipment(data: any, direction: 'Outbound' | 'Inbound', 
 
     const status = latestEvent?.description || 'Unknown';
   
-  const baseRecord = {
-    'Direction': direction,
-    'Shipment ID': String(data.clientId || data.id),
-    'Source Store': storeName,
-    'Source Store Order ID': String(data.clientId || ''),
-    'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
-    'Order Date': (data.createDate ? formatApiDate(data.createDate) : new Date()),
-    'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
-    'Email': data.deliveryInfo?.email || '',
-    'Status': status,
-    'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
-    'Courier': data.deliveryInfo?.courierName || storeName,
-    'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
-    'Status Date': latestEvent?.timeStamp ? formatApiDate(latestEvent.timeStamp) : new Date(),
-    'Address Line 1': data.deliveryInfo?.addressLine1 || '',
-    'Address Line 2': data.deliveryInfo?.addressLine2 || '',
-    'City': data.deliveryInfo?.suburb || '',
-    'Pin Code': data.deliveryInfo?.postalCode || '',
-    'items': data.items ? data.items.map((item: any) => ({
-        'SKU': item.itemNo,
-        'Quantity': item.qty,
-        'Item Name': item.name,
-    })) : [],
-  };
+    const parseApiDate = (dateStr: string | undefined): string => {
+        if (!dateStr || dateStr.length < 8) return new Date().toISOString();
+        try {
+            const year = parseInt(dateStr.substring(0, 4), 10);
+            const month = parseInt(dateStr.substring(4, 6), 10) - 1;
+            const day = parseInt(dateStr.substring(6, 8), 10);
+            if (dateStr.length >= 14) {
+                const hour = parseInt(dateStr.substring(8, 10), 10);
+                const minute = parseInt(dateStr.substring(10, 12), 10);
+                const second = parseInt(dateStr.substring(12, 14), 10);
+                return new Date(Date.UTC(year, month, day, hour, minute, second)).toISOString();
+            }
+            return new Date(Date.UTC(year, month, day)).toISOString();
+        } catch (e) {
+            return new Date().toISOString();
+        }
+    };
+
+    const baseRecord = {
+        'Direction': direction,
+        'Shipment ID': String(data.clientId || data.id),
+        'Source Store': storeName,
+        'Source Store Order ID': String(data.clientId || ''),
+        'Channel ID': direction === 'Outbound' ? data.channelId : undefined,
+        'Order Date': parseApiDate(data.createDate),
+        'Customer Name': data.deliveryInfo?.customer || data.deliveryInfo?.contactName || '',
+        'Email': data.deliveryInfo?.email || '',
+        'Status': status,
+        'Tracking No': data.deliveryInfo?.trackingNo || data.deliveryInfo?.waybillNumber || '',
+        'Courier': data.deliveryInfo?.courierName || storeName,
+        'Tracking Link': data.deliveryInfo?.trackingUrl || data.deliveryInfo?.trackingURL || '',
+        'Status Date': parseApiDate(latestEvent?.timeStamp),
+        'Address Line 1': data.deliveryInfo?.addressLine1 || '',
+        'Address Line 2': data.deliveryInfo?.addressLine2 || '',
+        'City': data.deliveryInfo?.suburb || '',
+        'Pin Code': data.deliveryInfo?.postalCode || '',
+        'items': data.items ? data.items.map((item: any) => ({
+            'SKU': item.itemNo,
+            'Quantity': item.qty,
+            'Item Name': item.name,
+        })) : [],
+    };
 
   const finalRecord = { ...baseRecord, id: baseRecord['Shipment ID'] };
   return finalRecord;
-}
-
-function formatApiDate(dateStr: string): Date {
-  if (!dateStr || dateStr.length < 8) return new Date();
-  try {
-    const year = parseInt(dateStr.substring(0, 4), 10);
-    const month = parseInt(dateStr.substring(4, 6), 10) - 1;
-    const day = parseInt(dateStr.substring(6, 8), 10);
-    if (dateStr.length >= 14) {
-      const hour = parseInt(dateStr.substring(8, 10), 10);
-      const minute = parseInt(dateStr.substring(10, 12), 10);
-      const second = parseInt(dateStr.substring(12, 14), 10);
-      return new Date(Date.UTC(year, month, day, hour, minute, second));
-    }
-    return new Date(Date.UTC(year, month, day));
-  } catch (e) {
-    return new Date();
-  }
-}
-
-/**
- * Ensures a record's date fields are converted to ISO strings for serialization.
- * It handles both JavaScript Date objects and Firestore Timestamp objects.
- */
-function ensureSerializable<T extends Shipment | Inbound>(record: T): T {
-    const newRecord = { ...record };
-
-    const processDate = (dateValue: any): string | undefined => {
-        if (!dateValue) return undefined;
-        // Check for Firestore Timestamp (which has _seconds and _nanoseconds)
-        if (typeof dateValue === 'object' && dateValue !== null && '_seconds' in dateValue && '_nanoseconds' in dateValue) {
-            return new Date(dateValue._seconds * 1000).toISOString();
-        }
-        // Check for JavaScript Date object
-        if (dateValue instanceof Date) {
-            return dateValue.toISOString();
-        }
-        // If it's already a string, return it as is
-        if (typeof dateValue === 'string') {
-            return dateValue;
-        }
-        // Fallback for other types, though this shouldn't happen with correct typing
-        return new Date(dateValue).toISOString();
-    };
-
-    if (newRecord['Order Date']) {
-        newRecord['Order Date'] = processDate(newRecord['Order Date']);
-    }
-
-    if (newRecord['Status Date']) {
-        newRecord['Status Date'] = processDate(newRecord['Status Date']);
-    }
-    
-    return newRecord;
 }
 
     
