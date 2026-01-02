@@ -89,7 +89,6 @@ export const lookupShipmentFlow = ai.defineFlow(
         }
         
         const finalResult = { shipment: foundRecord, relatedInbound };
-        // Force serialization to a plain object before yielding
         const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
         yield { result: finalSerializableResult };
         return;
@@ -136,13 +135,11 @@ export const lookupShipmentFlow = ai.defineFlow(
       }
       
       const finalResult = { shipment: foundRecord, relatedInbound: relatedInbound };
-      // Force serialization to a plain object before yielding
       const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
       yield { result: finalSerializableResult };
       return;
     }
 
-    // Explicitly yield failure if nothing found
     yield { result: { shipment: null, relatedInbound: null, error: `Record not found in ${storeName || 'any configured'} warehouse store or local database.` } };
   }
 );
@@ -227,15 +224,6 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
   }
 }
 
-const toISOStringIfTimestamp = (value: any): string | any => {
-  if (value && typeof value === 'object' && value.hasOwnProperty('_seconds')) {
-    // This is a Firestore Timestamp
-    return new Date(value._seconds * 1000).toISOString();
-  }
-  return value;
-};
-
-
 async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'inbound' | 'outbound'): Promise<Shipment | Inbound | null> {
     try {
         const { firestore } = initializeFirebaseOnServer();
@@ -251,12 +239,7 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
             const docRef = ref.doc(searchTerm);
             const snap = await docRef.get();
             if(snap.exists) {
-                let data = snap.data();
-                if (!data) return null;
-                // Convert Timestamps to ISO strings
-                data['Order Date'] = toISOStringIfTimestamp(data['Order Date']);
-                data['Status Date'] = toISOStringIfTimestamp(data['Status Date']);
-                data['updatedAt'] = toISOStringIfTimestamp(data['updatedAt']);
+                const data = JSON.parse(JSON.stringify(snap.data()));
                 return { id: snap.id, ...data };
             }
 
@@ -266,12 +249,7 @@ async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'i
                 const querySnap = await query.get();
                 if(!querySnap.empty) {
                     const doc = querySnap.docs[0];
-                    let data = doc.data();
-                    if (!data) return null;
-                     // Convert Timestamps to ISO strings
-                    data['Order Date'] = toISOStringIfTimestamp(data['Order Date']);
-                    data['Status Date'] = toISOStringIfTimestamp(data['Status Date']);
-                    data['updatedAt'] = toISOStringIfTimestamp(data['updatedAt']);
+                    const data = JSON.parse(JSON.stringify(doc.data()));
                     return { id: doc.id, ...data };
                 }
             }
