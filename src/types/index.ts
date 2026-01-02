@@ -111,6 +111,13 @@ export const LookupShipmentOutputSchema = z.object({
 });
 export type LookupShipmentOutput = z.infer<typeof LookupShipmentOutputSchema>;
 
+export const LookupShipmentStreamChunkSchema = z.object({
+  log: z.string().optional(),
+  result: LookupShipmentOutputSchema.optional(),
+});
+export type LookupShipmentStreamChunk = z.infer<typeof LookupShipmentStreamChunkSchema>;
+
+
 // Schema for multi-shipment lookup flow
 export const MultiLookupShipmentInputSchema = z.object({
   searchTerms: z.array(z.string()).describe('An array of search terms (e.g., order IDs).'),
@@ -127,6 +134,12 @@ export const MultiLookupShipmentOutputSchema = z.object({
 });
 export type MultiLookupShipmentOutput = z.infer<typeof MultiLookupShipmentOutputSchema>;
 
+export const MultiLookupShipmentStreamChunkSchema = z.object({
+    log: z.string().optional(),
+    result: MultiLookupShipmentOutputSchema.optional(),
+});
+export type MultiLookupShipmentStreamChunk = z.infer<typeof MultiLookupShipmentStreamChunkSchema>;
+
 
 // Schema for connection test streaming flow
 export const ConnectionTestStreamChunkSchema = z.object({
@@ -140,3 +153,5 @@ export const ConnectionTestStreamChunkSchema = z.object({
     .optional(),
 });
 export type ConnectionTestStreamChunk = z.infer<typeof ConnectionTestStreamChunkSchema>;
+
+    

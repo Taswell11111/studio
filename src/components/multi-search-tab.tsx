@@ -3,8 +3,8 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { multiLookupShipmentAction } from '@/app/actions';
-import { ShipmentRecord } from '@/types';
+import { multiLookupShipmentFlow } from '@/ai/flows/multi-lookup-shipment';
+import { type MultiLookupShipmentOutput, type ShipmentRecord } from '@/types';
 import { STORES } from '@/lib/stores';
 
 import { Card } from '@/components/ui/card';
@@ -60,25 +60,34 @@ export function MultiSearchTab() {
       setNotFound([]);
       setLogs([]);
       try {
-        const response = await multiLookupShipmentAction({ 
-          searchTerms: terms,
-          storeNames: selectedStores.length > 0 ? selectedStores : undefined,
-          direction: searchDirection,
+        const stream = multiLookupShipmentFlow({ 
+            searchTerms: terms,
+            storeNames: selectedStores.length > 0 ? selectedStores : undefined,
+            direction: searchDirection,
+            abortSignal: abortControllerRef.current?.signal,
         });
 
-        if (abortControllerRef.current?.signal.aborted) {
-            console.log("Multi-search was aborted.");
-            return;
-        }
+        for await (const chunk of stream) {
+            if(abortControllerRef.current?.signal.aborted) break;
 
-        setResults(response.results);
-        setNotFound(response.notFound);
+            if (chunk.log) {
+                setLogs(prev => [...prev, chunk.log as string]);
+            }
+            if (chunk.result) {
+                setResults(chunk.result.results);
+                setNotFound(chunk.result.notFound);
+            }
+            if (chunk.result?.error) {
+                throw new Error(chunk.result.error);
+            }
+        }
+        
         toast({
           title: 'Search Complete',
-          description: `Found ${response.results.length} unique records for ${terms.length} terms.`,
+          description: `Found ${results.length} unique records for ${terms.length} terms.`,
         });
       } catch (error: any) {
-         if (error.name === 'AbortError') {
+         if (error.name === 'AbortError' || error.message.includes('aborted')) {
             toast({ variant: 'default', title: 'Search Aborted' });
         } else {
             toast({
@@ -318,3 +327,5 @@ export function MultiSearchTab() {
     </>
   );
 }
+
+    

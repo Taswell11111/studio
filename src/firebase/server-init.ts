@@ -24,9 +24,10 @@ export function initializeFirebaseOnServer(): { firestore: AdminFirestore } {
          }
     }
   
-  // The client is configured to use the '(default)' database.
-  // We must explicitly connect to the same database on the server.
+  // Explicitly get the firestore instance for the configured project.
   return {
-    firestore: getAdminFirestore(),
+    firestore: admin.firestore(),
   };
 }
+
+    

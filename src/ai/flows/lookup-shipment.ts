@@ -5,7 +5,7 @@ config();
 
 /**
  * @fileOverview A Genkit flow to look up shipment details.
- * It now implements a "local-first" search strategy.
+ * This is now a streaming flow that yields logs and the final result.
  * 1. It first queries the local Firestore database for a quick result.
  * 2. If not found locally, it performs a comprehensive live search across all configured Parcelninja stores.
  * 3. It prioritizes the live search based on the first letter of the search term.
@@ -22,6 +22,7 @@ import {
   LookupShipmentOutputSchema,
   type LookupShipmentOutput,
   type Inbound,
+  LookupShipmentStreamChunkSchema,
 } from '@/types';
 import { format } from 'date-fns';
 import { STORES, type Store } from '@/lib/stores';
@@ -30,7 +31,15 @@ import type { firestore as adminFirestore } from 'firebase-admin';
 
 // Main exported function that the client will call
 export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
-  return lookupShipmentFlow(input);
+  // This wrapper remains for compatibility with multi-lookup, but the core logic is in the flow.
+  let finalResult: LookupShipmentOutput = { shipment: null, relatedInbound: null };
+  const stream = lookupShipmentFlow(input);
+  for await (const chunk of stream) {
+    if (chunk.result) {
+      finalResult = chunk.result;
+    }
+  }
+  return finalResult;
 }
 
 const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
@@ -62,82 +71,84 @@ async function fetchFromParcelNinja(url: string, storeName: string, creds: Store
     return null;
 }
 
-const lookupShipmentFlow = ai.defineFlow(
+export const lookupShipmentFlow = ai.defineFlow(
   {
     name: 'lookupShipmentFlow',
     inputSchema: LookupShipmentInputSchema,
-    outputSchema: LookupShipmentOutputSchema,
+    outputSchema: LookupShipmentStreamChunkSchema,
+    stream: true,
   },
-  async ({ sourceStoreOrderId, storeName, direction = 'all', abortSignal }) => {
+  async function* ({ sourceStoreOrderId, storeName, direction = 'all', abortSignal }) {
     const searchTerm = sourceStoreOrderId;
-    // --- Pass 1: Search Local Firestore Database ---
-    console.log(`Starting Pass 1 (Local Firestore Search) for "${searchTerm}"...`);
+    
+    yield { log: `Starting Pass 1 (Local Firestore Search) for "${searchTerm}"...`};
     let foundRecord = await searchFirestoreDatabase(searchTerm, direction);
     
     if (foundRecord) {
-        console.log(`Record found in local Firestore database.`);
-        // Even if found locally, we might need to find its related inbound record
-        let relatedInbound = null;
+        yield { log: `Record found in local Firestore database.`};
+        let relatedInbound: Inbound | null = null;
         if (foundRecord.Direction === 'Outbound') {
              const numericId = (foundRecord['Shipment ID'] as string).replace(/\D/g, '');
              if(numericId) {
                 const returnId = `RET-${numericId}`;
-                console.log(`Outbound found, searching for related inbound: ${returnId}`);
-                // Search for the related inbound, starting with local database
+                yield { log: `Outbound found, searching for related inbound: ${returnId}`};
                 relatedInbound = await searchFirestoreDatabase(returnId, 'inbound');
                 if(!relatedInbound){
-                     // If not in database, try live API
-                     relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound', abortSignal)) as Inbound | null;
+                     const { record: liveRelated, logs: liveLogs } = await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound', abortSignal);
+                     for (const log of liveLogs) yield { log };
+                     relatedInbound = liveRelated as Inbound | null;
+
                      if(relatedInbound) await saveRecordToFirestore(relatedInbound);
                 }
              }
         }
-        return { shipment: foundRecord, relatedInbound };
+        yield { result: { shipment: foundRecord, relatedInbound } };
+        return;
     }
 
-
-    // --- Pass 2: Live API Search (if not in database) ---
-    console.log(`Not found in local Firestore. Starting Pass 2 (Live API Search) for "${searchTerm}"...`);
+    yield { log: `Not found in local Firestore. Starting Pass 2 (Live API Search)...`};
     const toDateRecent = new Date();
     const fromDateRecent = new Date(toDateRecent);
     fromDateRecent.setDate(toDateRecent.getDate() - 90);
-    foundRecord = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName, direction, abortSignal);
+    const { record: recentRecord, logs: recentLogs } = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName, direction, abortSignal);
+    for (const log of recentLogs) yield { log };
+    foundRecord = recentRecord;
 
-    // --- Pass 3: Historical Live Search (if not found in recent) ---
     if (!foundRecord) {
-        console.log(`Not found in recent data. Starting Pass 3 (Historical Live Search) for "${searchTerm}"...`);
+        yield { log: `Not found in recent data. Starting Pass 3 (Historical Live Search)...`};
         const fromDateHistorical = new Date('2014-01-01');
         const toDateHistorical = new Date('2030-01-01');
-        foundRecord = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical, storeName, direction, abortSignal);
+        const { record: historicalRecord, logs: historicalLogs } = await performLiveSearch(searchTerm, fromDateHistorical, toDateHistorical, storeName, direction, abortSignal);
+        for (const log of historicalLogs) yield { log };
+        foundRecord = historicalRecord;
     }
     
     let relatedInbound: Inbound | null = null;
     if (foundRecord) {
-      console.log(`Live search successful. Found record in ${foundRecord['Source Store']}.`);
+      yield { log: `Live search successful. Found record in ${foundRecord['Source Store']}.`};
       await saveRecordToFirestore(foundRecord);
 
-      // If it's an outbound shipment, look for a related inbound return
       if (foundRecord.Direction === 'Outbound') {
           const numericId = (foundRecord['Shipment ID'] as string).replace(/\D/g, '');
           if (numericId) {
               const returnId = `RET-${numericId}`;
-              console.log(`Outbound found, searching for related inbound: ${returnId}`);
-              relatedInbound = (await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound', abortSignal)) as Inbound | null;
+              yield { log: `Outbound found, searching for related inbound: ${returnId}`};
+              const { record: liveRelated, logs: liveLogs } = await performLiveSearch(returnId, new Date('2014-01-01'), new Date('2030-01-01'), undefined, 'inbound', abortSignal);
+              for (const log of liveLogs) yield { log };
+              relatedInbound = liveRelated as Inbound | null;
+              
               if (relatedInbound) {
-                console.log(`Found related inbound: ${relatedInbound['Shipment ID']}`);
+                yield { log: `Found related inbound: ${relatedInbound['Shipment ID']}`};
                 await saveRecordToFirestore(relatedInbound);
               }
           }
       }
 
-      return { shipment: foundRecord, relatedInbound: relatedInbound };
+      yield { result: { shipment: foundRecord, relatedInbound: relatedInbound } };
+      return;
     }
 
-    return {
-      shipment: null,
-      relatedInbound: null,
-      error: `Record not found in ${storeName || 'any configured'} warehouse store or local database.`,
-    };
+    yield { result: { shipment: null, relatedInbound: null, error: `Record not found in ${storeName || 'any configured'} warehouse store or local database.` } };
   }
 );
 
@@ -145,8 +156,10 @@ const lookupShipmentFlow = ai.defineFlow(
 /**
  * Performs the actual live search logic for a given date range.
  */
-async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date, storeName?: string, direction: 'all' | 'inbound' | 'outbound' = 'all', signal?: AbortSignal): Promise<Shipment | Inbound | null> {
+async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Date, storeName: string | undefined, direction: 'all' | 'inbound' | 'outbound', signal: AbortSignal | undefined): Promise<{ record: Shipment | Inbound | null; logs: string[] }> {
     
+    const logs: string[] = [];
+
     let storesToSearch = STORES;
     if (storeName && storeName !== 'All') {
         const specificStore = STORES.find(s => s.name === storeName);
@@ -164,46 +177,44 @@ async function performLiveSearch(searchTerm: string, fromDate: Date, toDate: Dat
     const endDate = format(toDate, 'yyyyMMdd');
 
     for (const creds of storesToSearch) {
-        console.log(`[${creds.name}] Live searching for "${searchTerm}" between ${startDate} and ${endDate}...`);
+        logs.push(`[${creds.name}] Searching for "${searchTerm}"...`);
         
-        // Search Outbounds
         if (direction === 'all' || direction === 'outbound') {
-            // 1. Exact ID lookup for Outbounds
+            logs.push(`[${creds.name}] Checking Outbounds by Client ID...`);
             let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/outbounds/0`, creds.name, creds, signal, { 'X-Client-Id': searchTerm });
-            if (data && data.id) return mapParcelninjaToShipment(data, 'Outbound', creds.name);
+            if (data && data.id) return { record: mapParcelninjaToShipment(data, 'Outbound', creds.name), logs };
 
-            // 2. General search for Outbounds (including by Channel ID)
+            logs.push(`[${creds.name}] Checking Outbounds by Search/Channel ID...`);
             const outboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}&channelId=${encodeURIComponent(searchTerm)}`;
             data = await fetchFromParcelNinja(outboundSearchUrl, creds.name, creds, signal);
             if (data && data.outbounds && data.outbounds.length > 0) {
                 const detailUrl = `${WAREHOUSE_API_BASE_URL}/outbounds/${data.outbounds[0].id}/events`;
+                logs.push(`[${creds.name}] Found summary, fetching details from ${detailUrl}`);
                 const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds, signal);
-                if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name);
+                if (fullRecord && fullRecord.id) return { record: mapParcelninjaToShipment(fullRecord, 'Outbound', creds.name), logs };
             }
         }
         
-        // Search Inbounds
         if (direction === 'all' || direction === 'inbound') {
-            // 3. Exact ID lookup for Inbounds
+            logs.push(`[${creds.name}] Checking Inbounds by Client ID...`);
             let data = await fetchFromParcelNinja(`${WAREHOUSE_API_BASE_URL}/inbounds/0`, creds.name, creds, signal, { 'X-Client-Id': searchTerm });
-            if (data && data.id) return mapParcelninjaToShipment(data, 'Inbound', creds.name);
+            if (data && data.id) return { record: mapParcelninjaToShipment(data, 'Inbound', creds.name), logs };
 
-            // 4. General search for Inbounds
+            logs.push(`[${creds.name}] Checking Inbounds by Search...`);
             const inboundSearchUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/?startDate=${startDate}&endDate=${endDate}&pageSize=1&page=1&search=${encodeURIComponent(searchTerm)}`;
             data = await fetchFromParcelNinja(inboundSearchUrl, creds.name, creds, signal);
             if (data && data.inbounds && data.inbounds.length > 0) {
                 const detailUrl = `${WAREHOUSE_API_BASE_URL}/inbounds/${data.inbounds[0].id}/events`;
+                 logs.push(`[${creds.name}] Found summary, fetching details from ${detailUrl}`);
                 const fullRecord = await fetchFromParcelNinja(detailUrl, creds.name, creds, signal);
-                if (fullRecord && fullRecord.id) return mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name);
+                if (fullRecord && fullRecord.id) return { record: mapParcelninjaToShipment(fullRecord, 'Inbound', creds.name), logs };
             }
         }
     }
-    return null;
+    return { record: null, logs };
 }
 
-/**
- * Saves the found record to the correct Firestore collection.
- */
+
 async function saveRecordToFirestore(record: Shipment | Inbound) {
   try {
     const { firestore } = initializeFirebaseOnServer();
@@ -222,44 +233,45 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
   }
 }
 
-/**
- * Searches the Firestore database for a matching record.
- */
+
 async function searchFirestoreDatabase(searchTerm: string, direction: 'all' | 'inbound' | 'outbound'): Promise<Shipment | Inbound | null> {
-    const { firestore } = initializeFirebaseOnServer();
-    const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
+    try {
+        const { firestore } = initializeFirebaseOnServer();
+        const appId = process.env.NEXT_PUBLIC_APP_ID || 'default-app-id';
 
-    const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
-    const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
+        const shipmentsRef = firestore.collection(`artifacts/${appId}/public/data/shipments`);
+        const inboundsRef = firestore.collection(`artifacts/${appId}/public/data/inbounds`);
 
-    const fieldsToSearch = ['Source Store Order ID', 'Customer Name', 'Tracking No', 'Channel ID'];
+        const fieldsToSearch = ['Source Store Order ID', 'Customer Name', 'Tracking No', 'Channel ID'];
 
-    const searchCollection = async (ref: adminFirestore.CollectionReference) => {
-        // Try to get by document ID first
-        const docRef = ref.doc(searchTerm);
-        const snap = await docRef.get();
-        if(snap.exists) return { id: snap.id, ...snap.data() };
+        const searchCollection = async (ref: adminFirestore.CollectionReference) => {
+            const docRef = ref.doc(searchTerm);
+            const snap = await docRef.get();
+            if(snap.exists) return { id: snap.id, ...snap.data() };
 
-        // Fallback to querying fields
-        for (const field of fieldsToSearch) {
-            const query = ref.where(field, '==', searchTerm);
-            const querySnap = await query.get();
-            if(!querySnap.empty) {
-                const doc = querySnap.docs[0];
-                return { id: doc.id, ...doc.data() };
+            for (const field of fieldsToSearch) {
+                const query = ref.where(field, '==', searchTerm);
+                const querySnap = await query.get();
+                if(!querySnap.empty) {
+                    const doc = querySnap.docs[0];
+                    return { id: doc.id, ...doc.data() };
+                }
             }
+            return null;
         }
-        return null;
-    }
 
-    if (direction === 'all' || direction === 'outbound') {
-        const shipmentResult = await searchCollection(shipmentsRef);
-        if (shipmentResult) return shipmentResult as Shipment;
-    }
-    
-    if (direction === 'all' || direction === 'inbound') {
-        const inboundResult = await searchCollection(inboundsRef);
-        if (inboundResult) return inboundResult as Inbound;
+        if (direction === 'all' || direction === 'outbound') {
+            const shipmentResult = await searchCollection(shipmentsRef);
+            if (shipmentResult) return shipmentResult as Shipment;
+        }
+        
+        if (direction === 'all' || direction === 'inbound') {
+            const inboundResult = await searchCollection(inboundsRef);
+            if (inboundResult) return inboundResult as Inbound;
+        }
+    } catch(e: any) {
+        console.error("CRITICAL: Firestore search failed with error:", e);
+        throw new Error("Could not connect to the local database. " + (e.message || ""));
     }
 
     return null;
@@ -323,3 +335,5 @@ function formatApiDate(dateStr: string): string {
     return new Date().toISOString();
   }
 }
+
+    

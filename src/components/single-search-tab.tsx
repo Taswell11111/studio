@@ -3,7 +3,7 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import type { Shipment, Inbound } from '@/types';
-import { lookupShipment } from '@/ai/flows/lookup-shipment';
+import { lookupShipmentFlow } from '@/ai/flows/lookup-shipment';
 import { STORES } from '@/lib/stores';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,52 +39,60 @@ export function SingleSearchTab() {
     
     setLastSearchedTerm(trimmedSearch);
 
-    // If there's an ongoing search, abort it first
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     
     startSearchTransition(async () => {
-      setSearchResult(null); // Clear previous result
-      setLogs([]); // Clear logs
+      setSearchResult(null);
+      setLogs([]);
       try {
-        const result = await lookupShipment({ 
+        const stream = lookupShipmentFlow({ 
             sourceStoreOrderId: trimmedSearch,
             storeName: selectedStore === 'All' ? undefined : selectedStore,
+            abortSignal: abortControllerRef.current?.signal,
         });
         
-        if (abortControllerRef.current?.signal.aborted) {
-            console.log("Search was aborted by the user.");
-            return;
+        let finalResult: SearchResult | null = null;
+        for await (const chunk of stream) {
+            if (abortControllerRef.current?.signal.aborted) {
+                throw new Error("Search was aborted by the user.");
+            }
+            if (chunk.log) {
+                setLogs(prev => [...prev, chunk.log as string]);
+            }
+            if(chunk.result) {
+                finalResult = chunk.result;
+            }
         }
 
-        if (result.shipment) {
-          setSearchResult({ shipment: result.shipment, relatedInbound: result.relatedInbound });
+        if (finalResult && finalResult.shipment) {
+          setSearchResult(finalResult);
           toast({
             title: "Record Found",
             description: `Displaying record matching "${trimmedSearch}"`,
           });
         } else {
+          setSearchResult(null);
           toast({
             variant: "destructive",
             title: "Not Found",
-            description: result.error || `Could not find any record matching "${trimmedSearch}".`,
+            description: finalResult?.error || `Could not find any record matching "${trimmedSearch}".`,
           });
         }
       } catch (err: any) {
-        if (err.name === 'AbortError') {
+        if (err.name === 'AbortError' || err.message.includes('aborted')) {
             toast({
                 variant: 'default',
                 title: 'Search Aborted',
-                description: 'The search operation was cancelled.',
             });
         } else {
             console.error("Search error:", err);
             toast({
                 variant: "destructive",
                 title: "Search Error",
-                description: "An unexpected error occurred while searching.",
+                description: err.message || "An unexpected error occurred while searching.",
             });
         }
       } finally {
@@ -160,7 +168,7 @@ export function SingleSearchTab() {
                 </Select>
                 <Button 
                     type="submit" 
-                    className="h-14" 
+                    className="h-14 px-8 text-lg" 
                     disabled={isSearching || !searchTerm.trim()}
                 >
                     {isSearching ? 'Searching...' : 'Search'}
@@ -194,3 +202,5 @@ export function SingleSearchTab() {
     </>
   );
 }
+
+    
