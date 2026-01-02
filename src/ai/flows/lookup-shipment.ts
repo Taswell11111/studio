@@ -88,7 +88,10 @@ export const lookupShipmentFlow = ai.defineFlow(
              }
         }
         
-        yield { result: { shipment: foundRecord, relatedInbound } };
+        const finalResult = { shipment: foundRecord, relatedInbound };
+        // Force serialization to a plain object before yielding
+        const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
+        yield { result: finalSerializableResult };
         return;
     }
 
@@ -132,7 +135,10 @@ export const lookupShipmentFlow = ai.defineFlow(
           }
       }
       
-      yield { result: { shipment: foundRecord, relatedInbound: relatedInbound } };
+      const finalResult = { shipment: foundRecord, relatedInbound: relatedInbound };
+      // Force serialization to a plain object before yielding
+      const finalSerializableResult = JSON.parse(JSON.stringify(finalResult));
+      yield { result: finalSerializableResult };
       return;
     }
 
@@ -211,10 +217,8 @@ async function saveRecordToFirestore(record: Shipment | Inbound) {
     const collectionName = record.Direction === 'Inbound' ? 'inbounds' : 'shipments';
     const docId = String(record.id);
     
-    // Use Firestore methods from the admin SDK (Firestore instance)
-    const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
-    
     const dataToSave = { ...record, updatedAt: new Date().toISOString() };
+    const docRef = firestore.collection(`artifacts/${appId}/public/data/${collectionName}`).doc(docId);
     await docRef.set(dataToSave, { merge: true });
     
     console.log(`Saved/Updated record ${docId} in Firestore at path: ${docRef.path}.`);
