@@ -209,9 +209,9 @@ export default function ShipmentDashboard() {
         </Card>
 
         <Tabs defaultValue="single-search" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-12">
-                <TabsTrigger value="single-search" className="text-base">Single-Search</TabsTrigger>
-                <TabsTrigger value="multi-search" className="text-base">Multi-Search</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 h-auto">
+                <TabsTrigger value="single-search">Single-Search</TabsTrigger>
+                <TabsTrigger value="multi-search">Multi-Search</TabsTrigger>
             </TabsList>
             <TabsContent value="single-search">
                 <SingleSearchTab />
