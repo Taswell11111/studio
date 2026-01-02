@@ -339,23 +339,38 @@ function formatApiDate(dateStr: string): Date {
 
 /**
  * Ensures a record's date fields are converted to ISO strings for serialization.
+ * It handles both JavaScript Date objects and Firestore Timestamp objects.
  */
 function ensureSerializable<T extends Shipment | Inbound>(record: T): T {
     const newRecord = { ...record };
-    
-    if (newRecord['Order Date'] && newRecord['Order Date'] instanceof Date) {
-        newRecord['Order Date'] = newRecord['Order Date'].toISOString();
-    } else if (newRecord['Order Date'] && typeof newRecord['Order Date'] === 'object' && '_seconds' in newRecord['Order Date']) {
-       // It's a Firestore timestamp
-       newRecord['Order Date'] = new Date((newRecord['Order Date'] as any)._seconds * 1000).toISOString();
+
+    const processDate = (dateValue: any): string | undefined => {
+        if (!dateValue) return undefined;
+        // Check for Firestore Timestamp (which has _seconds and _nanoseconds)
+        if (typeof dateValue === 'object' && dateValue !== null && '_seconds' in dateValue && '_nanoseconds' in dateValue) {
+            return new Date(dateValue._seconds * 1000).toISOString();
+        }
+        // Check for JavaScript Date object
+        if (dateValue instanceof Date) {
+            return dateValue.toISOString();
+        }
+        // If it's already a string, return it as is
+        if (typeof dateValue === 'string') {
+            return dateValue;
+        }
+        // Fallback for other types, though this shouldn't happen with correct typing
+        return new Date(dateValue).toISOString();
+    };
+
+    if (newRecord['Order Date']) {
+        newRecord['Order Date'] = processDate(newRecord['Order Date']);
     }
 
-    if (newRecord['Status Date'] && newRecord['Status Date'] instanceof Date) {
-        newRecord['Status Date'] = newRecord['Status Date'].toISOString();
-    } else if (newRecord['Status Date'] && typeof newRecord['Status Date'] === 'object' && '_seconds' in newRecord['Status Date']) {
-       // It's a Firestore timestamp
-       newRecord['Status Date'] = new Date((newRecord['Status Date'] as any)._seconds * 1000).toISOString();
+    if (newRecord['Status Date']) {
+        newRecord['Status Date'] = processDate(newRecord['Status Date']);
     }
     
     return newRecord;
 }
+
+    
