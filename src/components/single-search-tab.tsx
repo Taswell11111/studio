@@ -19,6 +19,7 @@ import { ProcessingModal } from './processing-modal';
 type SearchResult = {
     shipment: Shipment | Inbound | null;
     relatedInbound?: Inbound | null;
+    error?: string;
 };
 
 export function SingleSearchTab() {
@@ -57,7 +58,8 @@ export function SingleSearchTab() {
         let finalResult: SearchResult | null = null;
         for await (const chunk of stream) {
             if (abortControllerRef.current?.signal.aborted) {
-                throw new Error("Search was aborted by the user.");
+                // Don't throw error, just break loop client-side
+                break;
             }
             if (chunk.log) {
                 setLogs(prev => [...prev, chunk.log as string]);
@@ -65,6 +67,14 @@ export function SingleSearchTab() {
             if(chunk.result) {
                 finalResult = chunk.result;
             }
+        }
+
+        if (abortControllerRef.current?.signal.aborted) {
+           toast({
+                variant: 'default',
+                title: 'Search Aborted',
+            });
+            return;
         }
 
         if (finalResult && finalResult.shipment) {
@@ -82,19 +92,13 @@ export function SingleSearchTab() {
           });
         }
       } catch (err: any) {
-        if (err.name === 'AbortError' || err.message.includes('aborted')) {
-            toast({
-                variant: 'default',
-                title: 'Search Aborted',
-            });
-        } else {
-            console.error("Search error:", err);
-            toast({
-                variant: "destructive",
-                title: "Search Error",
-                description: err.message || "An unexpected error occurred while searching.",
-            });
-        }
+        // Catch errors that might happen before the loop (e.g. flow invocation error)
+        console.error("Search error:", err);
+        toast({
+            variant: "destructive",
+            title: "Search Error",
+            description: err.message || "An unexpected error occurred while searching.",
+        });
       } finally {
         abortControllerRef.current = null;
       }

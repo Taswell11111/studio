@@ -66,7 +66,8 @@ export function MultiSearchTab() {
             direction: searchDirection,
             abortSignal: abortControllerRef.current?.signal,
         });
-
+        
+        let finalResult: MultiLookupShipmentOutput | null = null;
         for await (const chunk of stream) {
             if(abortControllerRef.current?.signal.aborted) break;
 
@@ -74,20 +75,25 @@ export function MultiSearchTab() {
                 setLogs(prev => [...prev, chunk.log as string]);
             }
             if (chunk.result) {
-                setResults(chunk.result.results);
-                setNotFound(chunk.result.notFound);
-            }
-            if (chunk.result?.error) {
-                throw new Error(chunk.result.error);
+                finalResult = chunk.result;
             }
         }
         
+        if (finalResult) {
+            setResults(finalResult.results);
+            setNotFound(finalResult.notFound);
+            if (finalResult.error) {
+                 throw new Error(finalResult.error);
+            }
+        }
+
         toast({
           title: 'Search Complete',
-          description: `Found ${results.length} unique records for ${terms.length} terms.`,
+          description: `Found ${finalResult?.results.length || 0} unique records for ${terms.length} terms.`,
         });
+
       } catch (error: any) {
-         if (error.name === 'AbortError' || error.message.includes('aborted')) {
+         if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
             toast({ variant: 'default', title: 'Search Aborted' });
         } else {
             toast({
@@ -201,7 +207,7 @@ export function MultiSearchTab() {
                     </PopoverContent>
                 </Popover>
 
-                <ToggleGroup type="single" value={searchDirection} onValueChange={(value: SearchDirection) => value && setSearchDirection(value)} className="ml-auto" size="sm">
+                <ToggleGroup type="single" defaultValue="all" value={searchDirection} onValueChange={(value: SearchDirection) => value && setSearchDirection(value)} className="ml-auto" size="sm">
                     <ToggleGroupItem value="outbound" aria-label="Search outbounds only">
                         <Truck className="h-4 w-4 mr-2" /> Outbound
                     </ToggleGroupItem>

@@ -13,27 +13,11 @@ config();
 import { ai } from '@/ai/genkit';
 import {
   MultiLookupShipmentInputSchema,
-  type MultiLookupShipmentInput,
-  MultiLookupShipmentOutputSchema,
+  MultiLookupShipmentStreamChunkSchema,
   type MultiLookupShipmentOutput,
   type ShipmentRecord,
-  MultiLookupShipmentStreamChunkSchema,
 } from '@/types';
 import { lookupShipmentFlow } from './lookup-shipment';
-
-
-export async function multiLookupShipment(input: MultiLookupShipmentInput): Promise<MultiLookupShipmentOutput> {
-  // This wrapper can be simplified if the caller switches to streaming.
-  let finalResult: MultiLookupShipmentOutput = { results: [], notFound: [] };
-  const stream = multiLookupShipmentFlow(input);
-  for await (const chunk of stream) {
-    if (chunk.result) {
-      finalResult = chunk.result;
-    }
-  }
-  return finalResult;
-}
-
 
 export const multiLookupShipmentFlow = ai.defineFlow(
   {
@@ -97,10 +81,11 @@ export const multiLookupShipmentFlow = ai.defineFlow(
       }
       
       const uniqueResults = Array.from(new Map(results.map(item => [item.id, item])).values());
-      yield { result: { results: uniqueResults, notFound: notFound } };
+      const finalResult: MultiLookupShipmentOutput = { results: uniqueResults, notFound: notFound };
+      yield { result: finalResult };
 
     } catch (error: any) {
-        if (error.name === 'AbortError' || error.message === 'Flow aborted') {
+        if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
             yield { log: 'Multi-lookup flow was aborted.' };
             yield { result: { results: [], notFound: searchTerms, error: 'Search was aborted by user.' } };
         } else {

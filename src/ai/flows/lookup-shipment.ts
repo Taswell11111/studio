@@ -18,29 +18,12 @@ import { initializeFirebaseOnServer } from '@/firebase/server-init';
 import {
   type Shipment,
   LookupShipmentInputSchema,
-  type LookupShipmentInput,
-  LookupShipmentOutputSchema,
-  type LookupShipmentOutput,
-  type Inbound,
   LookupShipmentStreamChunkSchema,
+  type Inbound,
 } from '@/types';
 import { format } from 'date-fns';
 import { STORES, type Store } from '@/lib/stores';
 import type { firestore as adminFirestore } from 'firebase-admin';
-
-
-// Main exported function that the client will call
-export async function lookupShipment(input: LookupShipmentInput): Promise<LookupShipmentOutput> {
-  // This wrapper remains for compatibility with multi-lookup, but the core logic is in the flow.
-  let finalResult: LookupShipmentOutput = { shipment: null, relatedInbound: null };
-  const stream = lookupShipmentFlow(input);
-  for await (const chunk of stream) {
-    if (chunk.result) {
-      finalResult = chunk.result;
-    }
-  }
-  return finalResult;
-}
 
 const WAREHOUSE_API_BASE_URL = 'https://storeapi.parcelninja.com/api/v1';
 
@@ -82,7 +65,13 @@ export const lookupShipmentFlow = ai.defineFlow(
     const searchTerm = sourceStoreOrderId;
     
     yield { log: `Starting Pass 1 (Local Firestore Search) for "${searchTerm}"...`};
-    let foundRecord = await searchFirestoreDatabase(searchTerm, direction);
+    let foundRecord: Shipment | Inbound | null = null;
+    try {
+      foundRecord = await searchFirestoreDatabase(searchTerm, direction);
+    } catch (e: any) {
+        yield { result: { shipment: null, relatedInbound: null, error: `Local database search failed: ${e.message}` } };
+        return;
+    }
     
     if (foundRecord) {
         yield { log: `Record found in local Firestore database.`};
@@ -110,9 +99,11 @@ export const lookupShipmentFlow = ai.defineFlow(
     const toDateRecent = new Date();
     const fromDateRecent = new Date(toDateRecent);
     fromDateRecent.setDate(toDateRecent.getDate() - 90);
+
     const { record: recentRecord, logs: recentLogs } = await performLiveSearch(searchTerm, fromDateRecent, toDateRecent, storeName, direction, abortSignal);
     for (const log of recentLogs) yield { log };
     foundRecord = recentRecord;
+
 
     if (!foundRecord) {
         yield { log: `Not found in recent data. Starting Pass 3 (Historical Live Search)...`};
