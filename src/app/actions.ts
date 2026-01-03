@@ -56,8 +56,6 @@ export async function refreshAllShipmentsAction() {
  */
 export async function testConnectionsAction(): Promise<Response> {
   try {
-    // Genkit flows return a Promise by default. To stream, we must call .stream()
-    // and access the .stream property of the result.
     const flowResponse = testParcelninjaConnectionFlow.stream();
     const flowStream = flowResponse.stream;
     
@@ -66,11 +64,20 @@ export async function testConnectionsAction(): Promise<Response> {
         const encoder = new TextEncoder();
         try {
           for await (const chunk of flowStream) {
-            controller.enqueue(encoder.encode(JSON.stringify(chunk) + '\n\n'));
+            const plainChunk = {
+                log: chunk.log,
+                result: chunk.result ? {
+                    storeName: chunk.result.storeName,
+                    success: chunk.result.success,
+                    error: chunk.result.error,
+                } : undefined,
+                error: chunk.error ? { message: chunk.error } : undefined,
+            };
+            controller.enqueue(encoder.encode(JSON.stringify(plainChunk) + '\n\n'));
           }
         } catch (e: any) {
            console.error("Error in stream processing:", e);
-           const errorChunk = { error: e.message || "An unknown stream error occurred." };
+           const errorChunk = { error: { message: e.message || "An unknown stream error occurred." }};
            controller.enqueue(encoder.encode(JSON.stringify(errorChunk) + '\n\n'));
         } finally {
             controller.close();
@@ -83,7 +90,7 @@ export async function testConnectionsAction(): Promise<Response> {
     });
   } catch (error: any) {
     console.error("Critical error in testConnectionsAction:", error);
-    return new Response(JSON.stringify({ error: error.message || 'An unknown error occurred' }), {
+    return new Response(JSON.stringify({ error: { message: error.message || 'An unknown error occurred' } }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -96,7 +103,10 @@ export async function testConnectionsAction(): Promise<Response> {
  */
 export async function multiLookupAction(input: MultiLookupShipmentInput): Promise<Response> {
     try {
-        const flowResponse = multiLookupShipmentFlow.stream(input);
+        const flowResponse = multiLookupShipmentFlow.stream({
+            ...input,
+            abortSignal: new AbortController().signal // Simplified for now
+        });
         const flowStream = flowResponse.stream;
 
         const readableStream = new ReadableStream({
@@ -104,7 +114,6 @@ export async function multiLookupAction(input: MultiLookupShipmentInput): Promis
                 const encoder = new TextEncoder();
                 try {
                     for await (const chunk of flowStream) {
-                        // Manually reconstruct the object to ensure it is plain.
                         const plainChunk = {
                             log: chunk.log,
                             result: chunk.result ? {
@@ -112,7 +121,7 @@ export async function multiLookupAction(input: MultiLookupShipmentInput): Promis
                                 notFound: chunk.result.notFound,
                                 error: chunk.result.error,
                             } : undefined,
-                            error: chunk.error ? { message: chunk.error.message } : undefined,
+                            error: chunk.error ? { message: chunk.error } : undefined,
                         };
                         controller.enqueue(encoder.encode(JSON.stringify(plainChunk) + '\n\n'));
                     }
@@ -142,12 +151,13 @@ export async function multiLookupAction(input: MultiLookupShipmentInput): Promis
 
 /**
  * Server action to perform a single shipment lookup and stream results.
- * NOTE: This is likely replaced by /api/lookup/single route for reliability, 
- * but kept here if needed or for legacy support.
  */
 export async function singleLookupAction(input: LookupShipmentInput): Promise<Response> {
     try {
-        const flowResponse = lookupShipmentFlow.stream(input);
+        const flowResponse = lookupShipmentFlow.stream({
+            ...input,
+            abortSignal: new AbortController().signal // Simplified for now
+        });
         const flowStream = flowResponse.stream;
 
         const readableStream = new ReadableStream({
@@ -155,15 +165,14 @@ export async function singleLookupAction(input: LookupShipmentInput): Promise<Re
                 const encoder = new TextEncoder();
                 try {
                     for await (const chunk of flowStream) {
-                        // Manually reconstruct the object to ensure it is plain.
-                        const plainChunk = {
+                         const plainChunk = {
                           log: chunk.log,
                           result: chunk.result ? {
                             shipment: chunk.result.shipment,
                             relatedInbound: chunk.result.relatedInbound,
                             error: chunk.result.error,
                           } : undefined,
-                          error: chunk.error ? { message: chunk.error.message } : undefined,
+                          error: chunk.error ? { message: chunk.error } : undefined,
                         };
                         controller.enqueue(encoder.encode(JSON.stringify(plainChunk) + '\n\n'));
                     }
