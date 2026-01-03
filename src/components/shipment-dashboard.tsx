@@ -2,32 +2,27 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
-import { exportAllRecordsAction, testConnectionsAction } from '@/app/actions';
+import { exportAllRecordsAction } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 
-import { CloudLightning, Database, Download, Settings } from 'lucide-react';
+import { CloudLightning, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ProcessingModal } from '@/components/processing-modal';
 import { RefreshAllButton } from './refresh-all-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SingleSearchTab } from './single-search-tab';
 import { MultiSearchTab } from './multi-search-tab';
+import { GetSearchTab } from './get-search-tab';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { LogViewer } from './log-viewer';
 
 export default function ShipmentDashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTitle, setProcessingTitle] = useState('');
   const [isExporting, startExportTransition] = useTransition();
   const { toast } = useToast();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isTestingConnection, startTestConnectionTransition] = useTransition();
-  const [testConnectionLogs, setTestConnectionLogs] = useState<string[]>([]);
   const [isAppLoading, setIsAppLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate app loading without fetching data
     const timer = setTimeout(() => {
       setIsAppLoading(false);
     }, 500); 
@@ -104,64 +99,9 @@ export default function ShipmentDashboard() {
     });
   };
 
-  const handleTestConnections = () => {
-    startTestConnectionTransition(async () => {
-      setTestConnectionLogs([]);
-      setIsSettingsOpen(true);
-      try {
-        const response = await testConnectionsAction();
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("Could not get stream reader.");
-        const decoder = new TextDecoder();
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          // Handle streaming JSON objects, which may be split across chunks
-          chunk.split('\n\n').forEach(line => {
-              if (line.trim()) {
-                  try {
-                      const parsed = JSON.parse(line);
-                      if (parsed.log) {
-                          setTestConnectionLogs(prev => [...prev, parsed.log]);
-                      }
-                      if (parsed.result) {
-                          const { storeName, success, error } = parsed.result;
-                          const logMsg = success 
-                              ? `✅ ${storeName}: SUCCESS` 
-                              : `❌ ${storeName}: FAILED - ${error || 'Unknown error'}`;
-                          setTestConnectionLogs(prev => [...prev, logMsg]);
-                      }
-                  } catch (e) {
-                      console.warn("Could not parse log line:", line);
-                  }
-              }
-          });
-        }
-      } catch (error: any) {
-         setTestConnectionLogs(prev => [...prev, `Error: ${error.message}`]);
-      }
-    });
-  }
-
   return (
     <>
       <ProcessingModal isOpen={isProcessing || isExporting} title={processingTitle || (isExporting ? "Exporting all records..." : "")} />
-      
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-          <DialogContent className="max-w-4xl h-4/5 flex flex-col">
-              <DialogHeader>
-                  <DialogTitle>System Settings & Diagnostics</DialogTitle>
-                  <DialogDescription>
-                      Here you can perform system diagnostics and other administrative tasks.
-                  </DialogDescription>
-              </DialogHeader>
-              <div className="flex-grow overflow-y-auto">
-                 <LogViewer logs={testConnectionLogs} title="Connection Test Logs" />
-              </div>
-          </DialogContent>
-      </Dialog>
       
       <div className="max-w-7xl mx-auto space-y-6">
         <Card className="p-4 sm:p-6">
@@ -201,23 +141,24 @@ export default function ShipmentDashboard() {
                </div>
 
               <RefreshAllButton />
-              <Button size="sm" variant="ghost" onClick={handleTestConnections} disabled={isTestingConnection}>
-                  <Settings className={`w-4 h-4 ${isTestingConnection ? 'animate-spin' : ''}`} />
-              </Button>
             </div>
           </div>
         </Card>
 
         <Tabs defaultValue="single-search" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-auto">
+            <TabsList className="grid w-full grid-cols-3 h-auto">
                 <TabsTrigger value="single-search">Single-Search</TabsTrigger>
                 <TabsTrigger value="multi-search">Multi-Search</TabsTrigger>
+                <TabsTrigger value="get-search">GET-Search</TabsTrigger>
             </TabsList>
             <TabsContent value="single-search">
                 <SingleSearchTab />
             </TabsContent>
             <TabsContent value="multi-search">
                 <MultiSearchTab />
+            </TabsContent>
+            <TabsContent value="get-search">
+                <GetSearchTab />
             </TabsContent>
         </Tabs>
       </div>

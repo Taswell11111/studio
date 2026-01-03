@@ -1424,3 +1424,159 @@
 [error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
 [debug] [2026-01-03T10:33:08.334Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
 [debug] [2026-01-03T10:33:08.334Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:51.644Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:51.649Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:51.649Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:51.664Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:51.665Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:51.665Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:51.674Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:51.674Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:51.674Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:51.679Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:51.680Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:51.680Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:51.681Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:51.682Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:51.685Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:51.686Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:51.686Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:51.686Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:51.689Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:51.689Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:51.693Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo [none]
+[debug] [2026-01-03T10:56:51.698Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo [none]
+[debug] [2026-01-03T10:56:52.701Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo 200
+[debug] [2026-01-03T10:56:52.702Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo {"name":"projects/shipment-5b687/billingInfo","projectId":"shipment-5b687","billingAccountName":"billingAccounts/012FDF-60BEBD-ABBDA1","billingEnabled":true}
+[debug] [2026-01-03T10:56:52.703Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:52.703Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:52.703Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-01-03T10:56:52.718Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.718Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.719Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.719Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.762Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.765Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.765Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-01-03T10:56:52.765Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:52.772Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-01-03T10:56:52.772Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:52.775Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com [none]
+[debug] [2026-01-03T10:56:52.775Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:52.908Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo 200
+[debug] [2026-01-03T10:56:52.909Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo {"name":"projects/shipment-5b687/billingInfo","projectId":"shipment-5b687","billingAccountName":"billingAccounts/012FDF-60BEBD-ABBDA1","billingEnabled":true}
+[debug] [2026-01-03T10:56:52.909Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:52.909Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:52.909Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-01-03T10:56:52.915Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.915Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.916Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.916Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.938Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.941Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:52.941Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com [none]
+[debug] [2026-01-03T10:56:52.941Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:52.945Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-01-03T10:56:52.945Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:52.949Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com [none]
+[debug] [2026-01-03T10:56:52.950Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com x-goog-quota-user=projects/shipment-5b687
+[debug] [2026-01-03T10:56:53.354Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-01-03T10:56:53.354Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-01-03T10:56:53.644Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com 403
+[debug] [2026-01-03T10:56:53.644Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com [omitted]
+[debug] [2026-01-03T10:56:53.709Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com 200
+[debug] [2026-01-03T10:56:53.710Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebasedataconnect.googleapis.com [omitted]
+[debug] [2026-01-03T10:56:53.740Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com 200
+[debug] [2026-01-03T10:56:53.745Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-01-03T10:56:53.829Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com 403
+[debug] [2026-01-03T10:56:53.832Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/firebaseio.com [omitted]
+[debug] [2026-01-03T10:56:53.881Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com 200
+[debug] [2026-01-03T10:56:53.881Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/shipment-5b687/services/cloudfunctions.googleapis.com [omitted]
+[debug] [2026-01-03T10:56:53.883Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:53.883Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:53.887Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:53.916Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:53.917Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:53.917Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:53.924Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:53.925Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:53.925Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:53.930Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:53.931Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:53.931Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:53.932Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:53.933Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo [none]
+[debug] [2026-01-03T10:56:54.995Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo 200
+[debug] [2026-01-03T10:56:54.998Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo {"name":"projects/shipment-5b687/billingInfo","projectId":"shipment-5b687","billingAccountName":"billingAccounts/012FDF-60BEBD-ABBDA1","billingEnabled":true}
+[debug] [2026-01-03T10:56:54.998Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:54.998Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:54.998Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-01-03T10:56:55.004Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.004Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.004Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.007Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:55.007Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:55.031Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.037Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.037Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.047Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.047Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.047Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.062Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.062Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.062Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.063Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.069Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.069Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.069Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:55.070Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:55.070Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:55.070Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:55.070Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo [none]
+[debug] [2026-01-03T10:56:55.104Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.104Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.105Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.106Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.106Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.106Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.112Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:55.113Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:55.113Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:55.113Z] Checked if tokens are valid: true, expires at: 1767439983893
+[debug] [2026-01-03T10:56:55.113Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo [none]
+[debug] [2026-01-03T10:56:55.983Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo 200
+[debug] [2026-01-03T10:56:55.986Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo {"name":"projects/shipment-5b687/billingInfo","projectId":"shipment-5b687","billingAccountName":"billingAccounts/012FDF-60BEBD-ABBDA1","billingEnabled":true}
+[debug] [2026-01-03T10:56:55.987Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.987Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.987Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-01-03T10:56:55.990Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:55.991Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:55.991Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:55.994Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:55.994Z] > authorizing via signed-in user (taswell@ecomplete.co.za)
+[debug] [2026-01-03T10:56:56.201Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo 200
+[debug] [2026-01-03T10:56:56.202Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/shipment-5b687/billingInfo {"name":"projects/shipment-5b687/billingInfo","projectId":"shipment-5b687","billingAccountName":"billingAccounts/012FDF-60BEBD-ABBDA1","billingEnabled":true}
+[debug] [2026-01-03T10:56:56.202Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:56.202Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:56.202Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[debug] [2026-01-03T10:56:56.203Z] Object "/apphosting" in "firebase.json" is missing required property: {"missingProperty":"backendId"}
+[debug] [2026-01-03T10:56:56.203Z] Field "/apphosting" in "firebase.json" is possibly invalid: must be array
+[debug] [2026-01-03T10:56:56.203Z] Field "/apphosting" in "firebase.json" is possibly invalid: must match a schema in anyOf
+[error] Failed to fetch Firebase Project from Studio Workspace because WORKSPACE_SLUG environment variable is empty
+[debug] [2026-01-03T10:56:56.205Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2026-01-03T10:56:56.206Z] > authorizing via signed-in user (taswell@ecomplete.co.za)

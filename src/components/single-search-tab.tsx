@@ -3,7 +3,6 @@
 
 import React, { useState, useTransition, useRef } from 'react';
 import type { Shipment, Inbound, LookupShipmentStreamChunk } from '@/types';
-// import { singleLookupAction } from '@/app/actions'; // <-- NOT using Server Action anymore
 import { STORES } from '@/lib/stores';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,7 +24,7 @@ type SearchResult = {
 export function SingleSearchTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStore, setSelectedStore] = useState('All');
-  const [selectedSearchBy, setSelectedSearchBy] = useState('all');
+  const [selectedSearchBy, setSelectedSearchBy] = useState('shipmentId');
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, startSearchTransition] = useTransition();
   const [lastSearchedTerm, setLastSearchedTerm] = useState('');
@@ -51,7 +50,6 @@ export function SingleSearchTab() {
       setSearchResult(null);
       setLogs([]);
       try {
-        // Use Fetch to API Route instead of Server Action
         const response = await fetch('/api/lookup/single', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -69,6 +67,8 @@ export function SingleSearchTab() {
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        
+        // Force type assignment
         let finalResult: SearchResult | null = null;
         
         while(true) {
@@ -76,12 +76,12 @@ export function SingleSearchTab() {
             if (done) break;
 
             if (signal.aborted) {
+                await reader.cancel();
                 break;
             }
             
             const chunk = decoder.decode(value, { stream: true });
             
-            // Process potential multiple JSON objects in a single chunk
             chunk.split('\n\n').forEach(line => {
                 if(line.trim()) {
                     try {
@@ -90,7 +90,7 @@ export function SingleSearchTab() {
                             setLogs(prev => [...prev, parsed.log as string]);
                         }
                         if(parsed.result) {
-                            finalResult = parsed.result; // This will be overwritten until the final result arrives
+                            finalResult = parsed.result as SearchResult; 
                         }
                         if(parsed.error) {
                            throw new Error(parsed.error.message);
@@ -110,7 +110,7 @@ export function SingleSearchTab() {
             return;
         }
 
-        if (finalResult && finalResult.shipment) {
+        if (finalResult && (finalResult as SearchResult).shipment) {
           setSearchResult(finalResult);
           toast({
             title: "Record Found",
@@ -121,7 +121,7 @@ export function SingleSearchTab() {
           toast({
             variant: "destructive",
             title: "Not Found",
-            description: finalResult?.error || `Could not find any record matching "${trimmedSearch}".`,
+            description: (finalResult as unknown as SearchResult)?.error || `Could not find any record matching "${trimmedSearch}".`,
           });
         }
       } catch (err: any) {
@@ -184,26 +184,25 @@ export function SingleSearchTab() {
                 <Input
                     type="text"
                     className="w-full pl-11 pr-4 py-3 h-14 text-lg border-border focus:ring-primary focus:border-primary shadow-sm"
-                    placeholder="Search by Order ID, Shipment ID, Customer..."
+                    placeholder="Enter value..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
             <div className="flex gap-2">
                  <Select value={selectedSearchBy} onValueChange={setSelectedSearchBy}>
-                    <SelectTrigger className="w-[160px] h-14 text-base">
+                    <SelectTrigger className="w-[180px] h-14 text-base">
                         <div className="flex items-center gap-2">
                            <Filter className="w-4 h-4 text-muted-foreground" />
                            <SelectValue placeholder="Search By" />
                         </div>
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">Smart Search</SelectItem>
                         <SelectItem value="shipmentId">Shipment ID</SelectItem>
-                        <SelectItem value="orderId">Order ID</SelectItem>
+                        <SelectItem value="orderId">Channel ID</SelectItem>
                         <SelectItem value="customerName">Customer Name</SelectItem>
                         <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="trackingLink">Tracking Link</SelectItem>
+                        <SelectItem value="trackingLink">Tracking Number</SelectItem>
                         <SelectItem value="sku">Item SKU</SelectItem>
                     </SelectContent>
                 </Select>
@@ -251,7 +250,35 @@ export function SingleSearchTab() {
         {!searchResult && !lastSearchedTerm && !isSearching && (
           <Card className="text-center py-12 text-muted-foreground border-dashed bg-secondary/10">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Enter an Order ID, Shipment ID, Customer Name, or SKU to check its status.</p>
+            <p>Select a specific search field and store to locate a record.</p>
+            
+            <div className="mt-6 text-left max-w-lg mx-auto text-xs font-mono bg-card p-4 rounded border shadow-sm">
+                <p className="font-semibold mb-2 text-center text-primary">Sample Record Structure (Evaluated):</p>
+                <pre className="overflow-x-auto whitespace-pre-wrap">{`{
+  "Shipment ID": "SHP-10000534785",
+  "Source Store": "JEEP",
+  "Channel ID": "J16530",
+  "Customer Name": "Frans Steyn",
+  "Email": "fransqa.steyn@gmail.com",
+  "Status": "Courier Delivery Unsuccessful",
+  "Tracking No": "PNJ63369544",
+  "Tracking Link": "https://store.parcelninja.com/...",
+  "Order Date": "2025-12-04T17:24:23.000Z",
+  "Status Date": "2025-12-10T06:56:10.000Z",
+  "Address Line 1": "73 Sapphire Street",
+  "Address Line 2": "",
+  "City": "Secunda",
+  "Pin Code": "2302",
+  "Courier": "CourierGuy",
+  "items": [
+    {
+      "SKU": "A056-J1867857",
+      "Quantity": 1,
+      "Item Name": "A056-J1867857"
+    }
+  ]
+}`}</pre>
+            </div>
           </Card>
         )}
       </div>
